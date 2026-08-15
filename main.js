@@ -58,6 +58,13 @@ function utcDay(t) {
   return new Date(t).toISOString().slice(0, 10);
 }
 
+// USGS valorizza sempre la profondità, ma i messaggi EMSC appena creati a
+// volte non l'hanno ancora (arriva con l'aggiornamento successivo): senza
+// guardia il template literal stampa "undefined km".
+function fmtDepth(depth) {
+  return depth != null ? depth.toFixed(0) + ' km' : 'n.d.';
+}
+
 // Energia sismica: log10(E) = 1.5*M + 4.8 (Joule)
 function energyJoules(m) { return Math.pow(10, 1.5 * m + 4.8); }
 
@@ -113,7 +120,7 @@ const globe = Globe({ rendererConfig: { antialias: true, powerPreference: 'high-
     <div class="globe-tip">
       <b style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</b> — ${d.place}<br>
       ${fmtTime(d.time)} (${timeAgo(d.time)})<br>
-      Profondità: ${d.depth?.toFixed(0)} km <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}
+      Profondità: ${fmtDepth(d.depth)} <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}
     </div>`)
   .onPointClick(d => { flyTo(d, 1.2); showToast(d, false); })
   // Anelli: onde sismiche animate sugli eventi recenti
@@ -387,7 +394,7 @@ function showToast(d, isNew = true, opts = {}) {
     `<button class="t-share" type="button" title="Copia un link diretto a questo evento">🔗 copia link</button>`;
   el.innerHTML = `
     <div class="t-title">${title} — <span style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</span></div>
-    <div class="t-body">${d.place}<br>${fmtTime(d.time)} · prof. ${d.depth?.toFixed(0)} km${d.tsunami ? ' · ⚠️ tsunami' : ''}</div>
+    <div class="t-body">${d.place}<br>${fmtTime(d.time)} · prof. ${fmtDepth(d.depth)}${d.tsunami ? ' · ⚠️ tsunami' : ''}</div>
     ${shareBtn}`;
   el.onclick = () => { flyTo(d, 1.2); dismiss(); };
   if (shareBtn) el.querySelector('.t-share').onclick = ev => { ev.stopPropagation(); shareQuake(d); };
@@ -497,7 +504,7 @@ function showCustomTip(q, x, y) {
   customTip.innerHTML = `
     <b style="color:${magColor(q.mag)}">M ${q.mag.toFixed(1)}</b> — ${q.place}<br>
     ${fmtTime(q.time)} (${timeAgo(q.time)})<br>
-    Profondità: ${q.depth?.toFixed(0)} km${q.tsunami ? '<br>⚠️ Allerta tsunami' : ''}`;
+    Profondità: ${fmtDepth(q.depth)}${q.tsunami ? '<br>⚠️ Allerta tsunami' : ''}`;
   customTip.style.display = 'block';
   // si sposta a sinistra del cursore se altrimenti uscirebbe dallo schermo
   const w = customTip.offsetWidth;
@@ -596,7 +603,7 @@ function renderList(vis) {
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
       <div class="q-info">
         <div class="q-place">${q.place}</div>
-        <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${q.depth?.toFixed(0)} km</div>
+        <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${fmtDepth(q.depth)}</div>
       </div>
       <button class="q-share" type="button" title="Copia un link diretto a questo evento">🔗</button>`;
     li.onclick = () => flyTo(q, 1.2);
