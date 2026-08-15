@@ -1,12 +1,16 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.5.0';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
 const MONTH_POLL_MS = 10 * 60_000; // refresh istogramma 30gg
 const RING_WINDOW_MS = 3 * 3600_000; // anelli animati per eventi recenti
+const REPLAY_RANGE_MS = 30 * 86400_000;   // copre l'intero istogramma dei 30 giorni
+const REPLAY_TRAIL_MS = 24 * 3600_000;    // finestra di eventi visibili in un dato istante del replay
+const REPLAY_TICK_MS = 200;
+const REPLAY_STEP_MS = REPLAY_RANGE_MS / 300; // ~48s reali per rivedere tutto il mese
 
 // ---------- Stato ----------
 const state = {
@@ -17,8 +21,11 @@ const state = {
   seenIds: new Set(),
   firstLoad: true,
   selectedDay: null, // 'YYYY-MM-DD' UTC oppure null
+  selectedCountry: null, // Feature GeoJSON del paese selezionato, oppure null
   sound: false,
   flyToNew: true,
+  replay: { active: false, playing: false, t: 0 }, // t = ms trascorsi dall'inizio della finestra di 30gg
+  emscLive: true,
 };
 
 // ---------- Utility ----------
@@ -51,6 +58,13 @@ function utcDay(t) {
   return new Date(t).toISOString().slice(0, 10);
 }
 
+// USGS valorizza sempre la profondità, ma i messaggi EMSC appena creati a
+// volte non l'hanno ancora (arriva con l'aggiornamento successivo): senza
+// guardia il template literal stampa "undefined km".
+function fmtDepth(depth) {
+  return depth != null ? depth.toFixed(0) + ' km' : 'n.d.';
+}
+
 // Energia sismica: log10(E) = 1.5*M + 4.8 (Joule)
 function energyJoules(m) { return Math.pow(10, 1.5 * m + 4.8); }
 
@@ -78,6 +92,16 @@ function parseFeed(geojson) {
     .sort((a, b) => b.time - a.time);
 }
 
+// Altezza del punto = profondità dell'ipocentro: gli eventi superficiali (i
+// più distruttivi in superficie, vedi guida) si sollevano dal globo, quelli
+// profondi restano quasi appiattiti. Scala a radice per rendere visibile la
+// differenza anche nei primi km, dove si concentra la maggioranza dei sismi.
+function depthAltitude(depth) {
+  const d = depth != null ? Math.max(0, depth) : 10;
+  const norm = Math.min(1, Math.sqrt(d / 200));
+  return 0.05 - norm * 0.042;
+}
+
 // ---------- Globo ----------
 const globe = Globe({ rendererConfig: { antialias: true, powerPreference: 'high-performance' } })($('globe'))
   .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
@@ -85,10 +109,10 @@ const globe = Globe({ rendererConfig: { antialias: true, powerPreference: 'high-
   .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
   .atmosphereColor('#5a82ff')
   .atmosphereAltitude(0.18)
-  // Punti: cerchi proporzionali alla magnitudo
+  // Punti: cerchi proporzionali alla magnitudo, sollevati dal globo in base alla profondità
   .pointLat('lat').pointLng('lng')
   .pointColor(d => magColor(d.mag))
-  .pointAltitude(0.008)
+  .pointAltitude(d => depthAltitude(d.depth))
   .pointRadius(d => Math.max(0.13, d.mag * d.mag * 0.032))
   .pointResolution(6)
   .pointsTransitionDuration(300)
@@ -96,7 +120,7 @@ const globe = Globe({ rendererConfig: { antialias: true, powerPreference: 'high-
     <div class="globe-tip">
       <b style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</b> — ${d.place}<br>
       ${fmtTime(d.time)} (${timeAgo(d.time)})<br>
-      Profondità: ${d.depth?.toFixed(0)} km${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}
+      Profondità: ${fmtDepth(d.depth)} <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}
     </div>`)
   .onPointClick(d => { flyTo(d, 1.2); showToast(d, false); })
   // Anelli: onde sismiche animate sugli eventi recenti
@@ -225,39 +249,117 @@ function newInternalBufferGeometry(protoGeometry) {
   throw new Error('classe BufferGeometry interna non individuata');
 }
 
+// Costruisce una singola mesh LineSegments da un insieme di polilinee
+// [lat,lng] e la aggiunge alla scena, riusando l'istanza three INTERNA di
+// globe.gl (vedi commenti sopra: un three esterno mandarebbe in stallo il
+// rendering). Ritorna l'oggetto three, per poterne poi cambiare .visible
+// senza rifare la fetch/geometria a ogni toggle.
+async function addLineMesh(linesLatLng, { altitude, color, opacity }) {
+  const pos = [];
+  for (const line of linesLatLng) {
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = globe.getCoords(line[i][0], line[i][1], altitude);
+      const b = globe.getCoords(line[i + 1][0], line[i + 1][1], altitude);
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+  }
+  const proto = await findLinePrototype();
+  const AttributeCls = proto.geometry.attributes.position.constructor;
+  const geo = newInternalBufferGeometry(proto.geometry);
+  geo.setAttribute('position', new AttributeCls(new Float32Array(pos), 3));
+  geo.computeBoundingSphere();
+  const mat = proto.material.clone();
+  mat.color.set(color);
+  mat.transparent = true;
+  mat.opacity = opacity;
+  mat.depthWrite = false;
+  const mesh = new (proto.constructor)(geo, mat);
+  globe.scene().add(mesh);
+  speedUpRaycasting(); // esclude anche la mesh appena aggiunta
+  return mesh;
+}
+
+// Confini nazionali (TopoJSON world-atlas), fusi in un'unica mesh di linee:
+// il layer poligoni di globe.gl genera ~1400 draw call, questa 1 sola. Dallo
+// stesso file si ricavano anche i poligoni dei singoli paesi (nessuna fetch
+// aggiuntiva): servono solo per il point-in-polygon al clic, mai per il
+// disegno, quindi non pesano sul rendering.
+let countryFeatures = [];
 fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
   .then(r => r.json())
-  .then(async world => {
-    const lines = topojson.mesh(world, world.objects.countries).coordinates;
-    const pos = [];
-    for (const line of lines) {
-      for (let i = 0; i < line.length - 1; i++) {
-        const a = globe.getCoords(line[i][1], line[i][0], 0.006);
-        const b = globe.getCoords(line[i + 1][1], line[i + 1][0], 0.006);
-        pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
-      }
-    }
-    // Geometria e materiale vanno creati con l'istanza three INTERNA di
-    // globe.gl: oggetti costruiti con un three importato a parte mandano in
-    // stallo il loop di rendering, senza errori in console. Si parte quindi da
-    // un oggetto di linee già in scena (il graticolo, che globe.gl crea sempre
-    // anche quando è invisibile) e se ne clona la geometria sostituendone il
-    // solo attributo "position": così non si dipende dalla catena di prototipi
-    // del suo costruttore, che potrebbe cambiare fra le versioni.
-    const proto = await findLinePrototype();
-    const AttributeCls = proto.geometry.attributes.position.constructor;
-    const geo = newInternalBufferGeometry(proto.geometry);
-    geo.setAttribute('position', new AttributeCls(new Float32Array(pos), 3));
-    geo.computeBoundingSphere();
-    const mat = proto.material.clone();
-    mat.color.set('#8cafff');
-    mat.transparent = true;
-    mat.opacity = 0.55;
-    mat.depthWrite = false;
-    globe.scene().add(new (proto.constructor)(geo, mat));
-    speedUpRaycasting(); // esclude anche i confini appena aggiunti
+  .then(world => {
+    countryFeatures = topojson.feature(world, world.objects.countries).features
+      .filter(f => f.properties && f.properties.name && f.properties.name !== 'Antarctica');
+    const lines = topojson.mesh(world, world.objects.countries).coordinates
+      .map(line => line.map(([lng, lat]) => [lat, lng]));
+    return addLineMesh(lines, { altitude: 0.006, color: '#8cafff', opacity: 0.55 });
   })
   .catch(err => console.error('Confini non caricati:', err));
+
+// ---------- Selezione paese al clic (point-in-polygon) ----------
+// Algoritmo ray-casting classico in coordinate lng/lat: gira solo al clic
+// (mai per frame), quindi anche un ciclo su tutti i ~940 vertici del paese
+// più complesso costa una frazione di millisecondo — zero impatto sulla GPU.
+function pointInRing(lng, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function pointInPolygon(lng, lat, rings) {
+  if (!pointInRing(lng, lat, rings[0])) return false;
+  for (let k = 1; k < rings.length; k++) if (pointInRing(lng, lat, rings[k])) return false; // buchi
+  return true;
+}
+function countryAt(lat, lng) {
+  for (const f of countryFeatures) {
+    const geom = f.geometry;
+    if (geom.type === 'Polygon') {
+      if (pointInPolygon(lng, lat, geom.coordinates)) return f;
+    } else if (geom.type === 'MultiPolygon') {
+      for (const poly of geom.coordinates) if (pointInPolygon(lng, lat, poly)) return f;
+    }
+  }
+  return null;
+}
+
+function quakeInCountry(q, feature) {
+  const geom = feature.geometry;
+  if (geom.type === 'Polygon') return pointInPolygon(q.lng, q.lat, geom.coordinates);
+  if (geom.type === 'MultiPolygon') return geom.coordinates.some(poly => pointInPolygon(q.lng, q.lat, poly));
+  return false;
+}
+
+globe.onGlobeClick((coords, ev) => {
+  // Se il clic ha colpito un epicentro (puntamento a mano, viste affollate),
+  // quello ha priorità: niente selezione del paese sotto al terremoto.
+  if (pickQuakeAt(ev.clientX, ev.clientY)) return;
+  const country = countryFeatures.length ? countryAt(coords.lat, coords.lng) : null;
+  const same = country && state.selectedCountry && country.properties.name === state.selectedCountry.properties.name;
+  selectCountry(same ? null : country);
+});
+
+// Confini di placca tettonica (dataset PB2002, Bird 2003) — stessa tecnica a
+// mesh unica dei confini nazionali: costo di rendering pressoché nullo anche
+// se sommato ai punti e agli anelli dei terremoti. Altitudine leggermente
+// superiore ai confini nazionali per evitare z-fighting fra le due mesh.
+let plateMesh = null;
+fetch('https://cdn.jsdelivr.net/gh/fraxen/tectonicplates@master/GeoJSON/PB2002_boundaries.json')
+  .then(r => r.json())
+  .then(async geojson => {
+    const lines = geojson.features
+      .flatMap(f => f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [f.geometry.coordinates])
+      .map(line => line.map(([lng, lat]) => [lat, lng]));
+    plateMesh = await addLineMesh(lines, { altitude: 0.0075, color: '#ff9f43', opacity: 0.45 });
+    plateMesh.visible = $('chk-plates').checked;
+  })
+  .catch(err => console.error('Placche tettoniche non caricate:', err));
+
+$('chk-plates').onchange = e => { if (plateMesh) plateMesh.visible = e.target.checked; };
 
 function flyTo(d, altitude = 1.5) {
   globe.pointOfView({ lat: d.lat, lng: d.lng, altitude }, 1200);
@@ -281,18 +383,55 @@ function beep(mag) {
 }
 
 // ---------- Toast ----------
-function showToast(d, isNew = true) {
+function showToast(d, isNew = true, opts = {}) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.style.borderLeftColor = magColor(d.mag);
+  const title = opts.label || (isNew ? '🚨 Nuovo terremoto' : 'ℹ️ Dettaglio');
+  // Gli eventi EMSC non sono nel dataset USGS del globo (vedi più sotto): un
+  // link ?id= punterebbe a un evento introvabile, quindi niente pulsante.
+  const shareBtn = opts.shareable === false ? '' :
+    `<button class="t-share" type="button" title="Copia un link diretto a questo evento">🔗 copia link</button>`;
   el.innerHTML = `
-    <div class="t-title">${isNew ? '🚨 Nuovo terremoto' : 'ℹ️ Dettaglio'} — <span style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</span></div>
-    <div class="t-body">${d.place}<br>${fmtTime(d.time)} · prof. ${d.depth?.toFixed(0)} km${d.tsunami ? ' · ⚠️ tsunami' : ''}</div>`;
+    <div class="t-title">${title} — <span style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</span></div>
+    <div class="t-body">${d.place}<br>${fmtTime(d.time)} · prof. ${fmtDepth(d.depth)}${d.tsunami ? ' · ⚠️ tsunami' : ''}</div>
+    ${shareBtn}`;
   el.onclick = () => { flyTo(d, 1.2); dismiss(); };
+  if (shareBtn) el.querySelector('.t-share').onclick = ev => { ev.stopPropagation(); shareQuake(d); };
   $('toasts').prepend(el);
   const dismiss = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); };
   setTimeout(dismiss, isNew ? 10_000 : 6_000);
   while ($('toasts').children.length > 5) $('toasts').lastChild.remove();
+}
+
+// Notice generica (non un evento): usata per confermare la copia del link.
+function showNotice(text, ms = 3000) {
+  const el = document.createElement('div');
+  el.className = 'toast notice';
+  el.textContent = text;
+  $('toasts').prepend(el);
+  const dismiss = () => { el.classList.add('out'); setTimeout(() => el.remove(), 400); };
+  setTimeout(dismiss, ms);
+  while ($('toasts').children.length > 5) $('toasts').lastChild.remove();
+}
+
+// Link diretto a un evento (?id=...): niente backend, solo un parametro nella
+// stessa index.html letto all'avvio (vedi in fondo al file).
+function shareUrl(q) {
+  const url = new URL(location.href);
+  url.search = '';
+  url.searchParams.set('id', q.id);
+  return url.toString();
+}
+function shareQuake(q) {
+  const link = shareUrl(q);
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(link)
+      .then(() => showNotice('🔗 Link copiato negli appunti'))
+      .catch(() => showNotice(link)); // niente permesso clipboard: mostra il link da copiare a mano
+  } else {
+    showNotice(link); // http non sicuro (es. anteprima locale): l'API Clipboard non è disponibile
+  }
 }
 
 // ---------- Puntamento dei terremoti con i punti fusi ----------
@@ -365,7 +504,7 @@ function showCustomTip(q, x, y) {
   customTip.innerHTML = `
     <b style="color:${magColor(q.mag)}">M ${q.mag.toFixed(1)}</b> — ${q.place}<br>
     ${fmtTime(q.time)} (${timeAgo(q.time)})<br>
-    Profondità: ${q.depth?.toFixed(0)} km${q.tsunami ? '<br>⚠️ Allerta tsunami' : ''}`;
+    Profondità: ${fmtDepth(q.depth)}${q.tsunami ? '<br>⚠️ Allerta tsunami' : ''}`;
   customTip.style.display = 'block';
   // si sposta a sinistra del cursore se altrimenti uscirebbe dallo schermo
   const w = customTip.offsetWidth;
@@ -423,10 +562,16 @@ function visibleQuakes() {
     list = state.quakes;
   }
   // minMag = 0 mostra tutto (il feed USGS contiene anche magnitudo negative)
-  return state.minMag > 0 ? list.filter(q => q.mag >= state.minMag) : list;
+  if (state.minMag > 0) list = list.filter(q => q.mag >= state.minMag);
+  if (state.selectedCountry) list = list.filter(q => quakeInCountry(q, state.selectedCountry));
+  return list;
 }
 
 function render() {
+  // In modalità replay il globo mostra la finestra scorrevole del mese invece
+  // che gli eventi live: nessun filtro giorno/paese, nessuna nuova geometria,
+  // solo un pointsData/ringsData diverso riusando gli stessi layer.
+  if (state.replay.active) { renderReplayFrame(); return; }
   const vis = visibleQuakes();
   const now = Date.now();
 
@@ -458,9 +603,11 @@ function renderList(vis) {
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
       <div class="q-info">
         <div class="q-place">${q.place}</div>
-        <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${q.depth?.toFixed(0)} km</div>
-      </div>`;
+        <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${fmtDepth(q.depth)}</div>
+      </div>
+      <button class="q-share" type="button" title="Copia un link diretto a questo evento">🔗</button>`;
     li.onclick = () => flyTo(q, 1.2);
+    li.querySelector('.q-share').onclick = ev => { ev.stopPropagation(); shareQuake(q); };
     ul.appendChild(li);
   }
 }
@@ -484,7 +631,10 @@ function renderHistogram() {
   const box = $('histogram');
   box.innerHTML = '';
   const byDay = new Map();
-  for (const q of state.monthQuakes) {
+  const src = state.selectedCountry
+    ? state.monthQuakes.filter(q => quakeInCountry(q, state.selectedCountry))
+    : state.monthQuakes;
+  for (const q of src) {
     const d = utcDay(q.time);
     const e = byDay.get(d) || { count: 0, max: 0 };
     e.count++;
@@ -522,6 +672,142 @@ function selectDay(day) {
   }
   renderHistogram();
   render();
+}
+
+function selectCountry(feature) {
+  state.selectedCountry = feature;
+  const banner = $('country-banner');
+  if (feature) {
+    const n = visibleQuakes().length;
+    $('country-banner-text').textContent = `🌐 ${feature.properties.name} — ${n} eventi`;
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+  renderHistogram();
+  render();
+}
+
+// ---------- Replay dei 30 giorni ----------
+let replayTimer = null;
+
+function startReplay() {
+  if (!state.monthQuakes.length) {
+    showNotice('⏳ Dati ancora in caricamento, riprova tra un istante.');
+    return;
+  }
+  state.replay.active = true;
+  state.replay.playing = true;
+  state.replay.t = 0;
+  $('replay-panel').classList.remove('hidden');
+  $('btn-replay').classList.add('active');
+  $('replay-playpause').textContent = '⏸️';
+  clearInterval(replayTimer);
+  replayTimer = setInterval(replayTick, REPLAY_TICK_MS);
+  render();
+}
+
+function exitReplay() {
+  state.replay.active = false;
+  state.replay.playing = false;
+  clearInterval(replayTimer);
+  replayTimer = null;
+  $('replay-panel').classList.add('hidden');
+  $('btn-replay').classList.remove('active');
+  render(); // torna alla vista live con i filtri correnti
+}
+
+function replayTick() {
+  if (!state.replay.playing) return;
+  state.replay.t += REPLAY_STEP_MS;
+  if (state.replay.t >= REPLAY_RANGE_MS) {
+    state.replay.t = REPLAY_RANGE_MS;
+    state.replay.playing = false;
+    $('replay-playpause').textContent = '▶️';
+    clearInterval(replayTimer);
+  }
+  render();
+}
+
+function toggleReplayPlay() {
+  state.replay.playing = !state.replay.playing;
+  $('replay-playpause').textContent = state.replay.playing ? '⏸️' : '▶️';
+  clearInterval(replayTimer);
+  if (state.replay.playing) {
+    if (state.replay.t >= REPLAY_RANGE_MS) state.replay.t = 0; // riparte se era arrivato in fondo
+    replayTimer = setInterval(replayTick, REPLAY_TICK_MS);
+  }
+}
+
+function renderReplayFrame() {
+  const virtualNow = Date.now() - REPLAY_RANGE_MS + state.replay.t;
+  const list = state.monthQuakes.filter(q => q.time <= virtualNow && q.time > virtualNow - REPLAY_TRAIL_MS);
+  globe.pointsMerge(list.length > 600);
+  globe.pointsData(list);
+  rebuildHitIndex(list);
+  const rings = list
+    .filter(q => virtualNow - q.time < 3 * 3600_000)
+    .sort((a, b) => b.mag - a.mag)
+    .slice(0, 20);
+  globe.ringsData(rings);
+  renderList(list);
+  $('replay-slider').value = Math.round((state.replay.t / REPLAY_RANGE_MS) * 1000);
+  $('replay-date').textContent = fmtTime(virtualNow);
+}
+
+// ---------- EMSC in tempo reale (WebSocket) ----------
+// Il globo, la lista e l'istogramma restano interamente sul feed REST USGS
+// (60s di ritardo) — quello è il layer già testato e verificato. Qui si
+// aggiunge SOLO una notifica quasi istantanea via WebSocket, dallo European-
+// Mediterranean Seismological Centre: nessun dato tocca pointsData/state.quakes,
+// quindi zero rischio per il rendering. Lo stesso terremoto può perciò
+// comparire due volte — prima come notifica EMSC, poi come voce vera e
+// propria quando USGS lo recepisce — è un compromesso accettato, non un bug.
+const EMSC_WS_URL = 'wss://www.seismicportal.eu/standing_order/websocket';
+const EMSC_MIN_MAG = 2.5;
+const EMSC_RECONNECT_MS = 5000;
+let emscWs = null;
+let emscReconnectTimer = null;
+
+function connectEmsc() {
+  if (!state.emscLive || emscWs) return;
+  try {
+    emscWs = new WebSocket(EMSC_WS_URL);
+  } catch (err) {
+    scheduleEmscReconnect();
+    return;
+  }
+  emscWs.onmessage = ev => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch (_) { return; }
+    if (msg.action !== 'create') return; // "update" = revisione di un evento già notificato
+    const p = msg.data && msg.data.properties;
+    if (!p || p.mag == null || p.mag < EMSC_MIN_MAG || p.lat == null || p.lon == null) return;
+    const q = {
+      mag: p.mag,
+      place: p.flynn_region || 'Località sconosciuta',
+      time: Date.parse(p.time) || Date.now(),
+      depth: p.depth,
+      lat: p.lat,
+      lng: p.lon,
+      tsunami: false,
+    };
+    showToast(q, true, { label: '⚡ EMSC in diretta', shareable: false });
+    beep(q.mag);
+  };
+  emscWs.onclose = () => { emscWs = null; scheduleEmscReconnect(); };
+  emscWs.onerror = () => { if (emscWs) emscWs.close(); };
+}
+
+function scheduleEmscReconnect() {
+  if (!state.emscLive || emscReconnectTimer) return;
+  emscReconnectTimer = setTimeout(() => { emscReconnectTimer = null; connectEmsc(); }, EMSC_RECONNECT_MS);
+}
+
+function disconnectEmsc() {
+  clearTimeout(emscReconnectTimer);
+  emscReconnectTimer = null;
+  if (emscWs) { emscWs.onclose = null; emscWs.close(); emscWs = null; }
 }
 
 // ---------- Fetch e polling ----------
@@ -602,7 +888,23 @@ $('chk-sound').onchange = e => {
 };
 $('chk-rotate').onchange = e => { globe.controls().autoRotate = e.target.checked; };
 $('chk-fly').onchange = e => { state.flyToNew = e.target.checked; };
+$('chk-emsc').onchange = e => {
+  state.emscLive = e.target.checked;
+  if (state.emscLive) connectEmsc(); else disconnectEmsc();
+};
 $('day-reset').onclick = () => selectDay(null);
+$('country-reset').onclick = () => selectCountry(null);
+
+$('btn-replay').onclick = () => { state.replay.active ? exitReplay() : startReplay(); };
+$('replay-playpause').onclick = toggleReplayPlay;
+$('replay-exit').onclick = exitReplay;
+$('replay-slider').oninput = e => {
+  state.replay.playing = false;
+  $('replay-playpause').textContent = '▶️';
+  clearInterval(replayTimer);
+  state.replay.t = (parseInt(e.target.value, 10) / 1000) * REPLAY_RANGE_MS;
+  render();
+};
 
 // Guida: il testo sta già nell'HTML (serve anche a motori di ricerca e IA,
 // che non eseguono JavaScript), qui si gestisce solo l'apertura.
@@ -637,11 +939,30 @@ if (['localhost', '127.0.0.1'].includes(location.hostname) ||
     new URLSearchParams(location.search).has('debug')) {
   window.SG = { globe, state };
 }
+// Link diretto a un evento (?id=...): cercato solo nei 30 giorni disponibili,
+// gli eventi più vecchi non sono raggiungibili con questa app.
+function openSharedQuake(id) {
+  const q = state.monthQuakes.find(x => x.id === id);
+  if (!q) {
+    showNotice('⚠️ Evento non trovato: il link punta a un terremoto più vecchio di 30 giorni, oppure non è più valido.');
+    return;
+  }
+  selectDay(utcDay(q.time));
+  flyTo(q, 1.3);
+  showToast(q, false);
+}
+
 $('app-version').textContent = 'SismoGlobe ' + APP_VERSION;
 (async () => {
+  const sharedId = new URLSearchParams(location.search).get('id');
   await loadFeed();
-  loadMonth();
+  const monthLoaded = loadMonth();
   $('loading').classList.add('done');
   setInterval(loadFeed, POLL_MS);
   setInterval(loadMonth, MONTH_POLL_MS);
+  connectEmsc();
+  if (sharedId) {
+    await monthLoaded;
+    openSharedQuake(sharedId);
+  }
 })();
