@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.4.0">
+<link rel="stylesheet" href="style.css?v=1.5.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -40,12 +40,15 @@
       "inLanguage": "it",
       "description": "Applicazione web che visualizza i terremoti di tutto il pianeta in tempo reale su un globo terrestre 3D interattivo, con cerchi proporzionali alla magnitudo, istogramma degli eventi giornalieri e calcolo dell'energia sismica rilasciata.",
       "featureList": [
-        "Globo 3D interattivo con confini nazionali",
+        "Globo 3D interattivo con confini nazionali e placche tettoniche",
         "Aggiornamento dei terremoti ogni 60 secondi dai feed USGS",
         "Avviso immediato a ogni nuovo sisma con magnitudo, località e profondità",
-        "Cerchi e onde animate proporzionali alla magnitudo",
-        "Istogramma dei terremoti al giorno negli ultimi 30 giorni",
-        "Energia sismica rilasciata nelle ultime 24 ore in equivalente TNT"
+        "Cerchi e onde animate proporzionali alla magnitudo, sollevati dal globo in base alla profondità dell'ipocentro",
+        "Istogramma dei terremoti al giorno negli ultimi 30 giorni, filtrabile anche per paese con un clic sul globo",
+        "Energia sismica rilasciata nelle ultime 24 ore in equivalente TNT",
+        "Link diretto e condivisibile a ogni singolo evento sismico",
+        "Replay animato degli ultimi 30 giorni di attività sismica",
+        "Notifiche quasi istantanee via WebSocket dal centro sismologico euro-mediterraneo EMSC"
       ],
       "isAccessibleForFree": true,
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
@@ -132,6 +135,8 @@
     <label class="chk"><input type="checkbox" id="chk-sound"> 🔔 audio</label>
     <label class="chk"><input type="checkbox" id="chk-rotate" checked> 🔄 rotazione</label>
     <label class="chk"><input type="checkbox" id="chk-fly" checked> 🎯 vola sui nuovi</label>
+    <label class="chk"><input type="checkbox" id="chk-plates" checked> 🌋 placche</label>
+    <label class="chk"><input type="checkbox" id="chk-emsc" checked> ⚡ EMSC live</label>
     <button id="btn-info" type="button" aria-expanded="false" aria-controls="info">ℹ️ guida</button>
   </div>
 
@@ -144,10 +149,24 @@
 <main>
   <aside id="panel">
     <section id="histo-box">
-      <h2>Terremoti al giorno <small>(30 giorni, UTC)</small></h2>
-      <div id="day-banner" class="hidden">
+      <h2>Terremoti al giorno <small>(30 giorni, UTC)</small>
+        <button id="btn-replay" type="button" title="Rivedi in sequenza gli ultimi 30 giorni">▶️ replay</button>
+      </h2>
+      <div id="day-banner" class="filter-banner hidden">
         <span id="day-banner-text"></span>
-        <button id="day-reset">✕ tutti</button>
+        <button id="day-reset" class="banner-reset">✕ giorno</button>
+      </div>
+      <div id="country-banner" class="filter-banner hidden">
+        <span id="country-banner-text"></span>
+        <button id="country-reset" class="banner-reset">✕ paese</button>
+      </div>
+      <div id="replay-panel" class="hidden">
+        <div class="replay-row">
+          <button id="replay-playpause" type="button" aria-label="Play/pausa">⏸️</button>
+          <input id="replay-slider" type="range" min="0" max="1000" value="0">
+          <button id="replay-exit" type="button" title="Esci dal replay">✕</button>
+        </div>
+        <div id="replay-date" class="replay-date"></div>
       </div>
       <div id="histogram"></div>
       <div class="legend">
@@ -210,13 +229,44 @@
     <p>Nei dettagli di ogni evento trovi la profondità dell'ipocentro in chilometri. È un'informazione decisiva:
     a parità di magnitudo, un terremoto <strong>superficiale</strong> (pochi chilometri) è molto più
     distruttivo in superficie di uno profondo qualche centinaio di chilometri, la cui energia si disperde prima
-    di arrivare in cima. Molti eventi apparentemente forti passano inosservati proprio perché profondi.</p>
+    di arrivare in cima. Molti eventi apparentemente forti passano inosservati proprio perché profondi. Sul
+    globo la profondità è visibile anche a colpo d'occhio: più un cerchio è <strong>sollevato</strong> dalla
+    superficie, più l'evento è superficiale; i terremoti profondi restano quasi appiattiti sul globo.</p>
+
+    <h2>Perché i terremoti si concentrano in certe zone</h2>
+    <p>Le linee arancioni sul globo (disattivabili con "🌋 placche") sono i confini delle <strong>placche
+    tettoniche</strong>, le grandi porzioni rigide in cui è divisa la crosta terrestre. La stragrande maggioranza
+    dei terremoti avviene proprio lungo questi confini, dove le placche scorrono, si scontrano o si allontanano
+    tra loro: non è un caso che la "cintura di fuoco" del Pacifico, la dorsale medio-atlantica o la fascia
+    himalayana concentrino la maggior parte degli eventi visibili sul globo.</p>
 
     <h2>Statistiche e storico</h2>
     <p>L'istogramma a sinistra conta i terremoti giorno per giorno negli ultimi 30 giorni (in orario UTC), con
     il colore della barra che riflette la scossa più forte di quella giornata. Facendo clic su una barra il
     globo mostra soltanto i sismi di quel giorno. In alto trovi il totale di oggi, quelli dell'ultima ora e la
-    magnitudo massima delle ultime 24 ore.</p>
+    magnitudo massima delle ultime 24 ore. Puoi anche fare clic direttamente su un <strong>paese</strong> sul
+    globo per filtrare lista e istogramma solo sui suoi eventi: i due filtri, giorno e paese, si possono
+    combinare, e un banner in alto al pannello mostra sempre cosa stai guardando con un pulsante per rimuoverlo.</p>
+
+    <h2>Notifiche quasi istantanee (EMSC)</h2>
+    <p>Il globo, la lista e l'istogramma restano basati sul feed USGS, aggiornato ogni 60 secondi. Con
+    "⚡ EMSC live" attivo, SismoGlobe apre anche una connessione diretta al centro sismologico euro-mediterraneo
+    (<strong>EMSC</strong>) via WebSocket: i nuovi eventi arrivano come notifica in pochi secondi, molto prima
+    del prossimo aggiornamento USGS. È solo un avviso rapido: lo stesso terremoto compare poi normalmente sul
+    globo quando USGS lo elabora, quindi può capitare di vederlo annunciato due volte da fonti diverse.</p>
+
+    <h2>Rivedere il mese in sequenza</h2>
+    <p>Il pulsante <strong>▶️ replay</strong> accanto all'istogramma comprime gli ultimi 30 giorni in una
+    sequenza animata di circa 48 secondi: il globo mostra solo i terremoti delle 24 ore precedenti all'istante
+    che si sta "riproducendo", così sciami sismici e sequenze di repliche diventano visibili a colpo d'occhio.
+    Si può mettere in pausa, trascinare lo slider per saltare a un momento preciso, o uscire in qualsiasi
+    momento tornando alla vista dal vivo.</p>
+
+    <h2>Condividere un evento</h2>
+    <p>Ogni terremoto ha un link diretto: passando il mouse su un evento nella lista, o aprendone il dettaglio
+    dopo un clic, compare un pulsante <strong>🔗 copia link</strong> che copia negli appunti un indirizzo del
+    tipo <code>sismo.gimmycloud.net/?id=...</code>. Aprendolo, SismoGlobe vola direttamente su quell'epicentro.
+    Funziona solo per eventi degli ultimi 30 giorni, il limite dei dati disponibili.</p>
 
     <h2>Avvertenza importante</h2>
     <p>SismoGlobe mostra terremoti <strong>già avvenuti</strong> e rilevati dalle reti sismiche.
@@ -244,6 +294,6 @@
 
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-<script src="main.js?v=1.4.0"></script>
+<script src="main.js?v=1.5.0"></script>
 </body>
 </html>
