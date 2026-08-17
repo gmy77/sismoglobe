@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.5.1';
+const APP_VERSION = 'v1.6.0';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -26,6 +26,7 @@ const state = {
   flyToNew: true,
   replay: { active: false, playing: false, t: 0 }, // t = ms trascorsi dall'inizio della finestra di 30gg
   emscLive: true,
+  emscPending: [], // eventi EMSC non ancora confermati dal feed USGS
 };
 
 // ---------- Utility ----------
@@ -604,15 +605,18 @@ function renderList(vis) {
     : `(${vis.length} visibili)`;
   for (const q of shown) {
     const li = document.createElement('li');
+    const isEmsc = q.source === 'emsc';
+    const shareBtn = isEmsc ? '' :
+      `<button class="q-share" type="button" title="Copia un link diretto a questo evento">🔗</button>`;
     li.innerHTML = `
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
       <div class="q-info">
-        <div class="q-place">${q.place}</div>
+        <div class="q-place">${q.place}${isEmsc ? ' <span class="q-pending" title="Notifica EMSC in attesa di conferma dal feed USGS">⚡</span>' : ''}</div>
         <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${fmtDepth(q.depth)}</div>
       </div>
-      <button class="q-share" type="button" title="Copia un link diretto a questo evento">🔗</button>`;
+      ${shareBtn}`;
     li.onclick = () => flyTo(q, 1.2);
-    li.querySelector('.q-share').onclick = ev => { ev.stopPropagation(); shareQuake(q); };
+    if (shareBtn) li.querySelector('.q-share').onclick = ev => { ev.stopPropagation(); shareQuake(q); };
     ul.appendChild(li);
   }
 }
@@ -761,18 +765,41 @@ function renderReplayFrame() {
 }
 
 // ---------- EMSC in tempo reale (WebSocket) ----------
-// Il globo, la lista e l'istogramma restano interamente sul feed REST USGS
-// (60s di ritardo) — quello è il layer già testato e verificato. Qui si
-// aggiunge SOLO una notifica quasi istantanea via WebSocket, dallo European-
-// Mediterranean Seismological Centre: nessun dato tocca pointsData/state.quakes,
-// quindi zero rischio per il rendering. Lo stesso terremoto può perciò
-// comparire due volte — prima come notifica EMSC, poi come voce vera e
-// propria quando USGS lo recepisce — è un compromesso accettato, non un bug.
+// Gli eventi arrivano dallo European-Mediterranean Seismological Centre in
+// pochi secondi, molto prima del prossimo poll USGS (fino a 60s). Vengono
+// inseriti subito in state.quakes (fonte 'emsc', id sintetico 'emsc-<unid>')
+// così contatore/lista/globo si aggiornano all'istante — non solo il toast.
+// Quando arriva il prossimo feed USGS, ogni evento EMSC "in sospeso" che
+// corrisponde (tempo/magnitudo/posizione vicini, vedi isSameEmscUsgsEvent) a
+// un evento USGS viene tolto dai sospesi e sostituito dalla voce ufficiale
+// USGS, senza un secondo toast/beep. Se USGS non lo conferma mai (fuori
+// catalogo o sotto soglia) resta come evento EMSC per EMSC_PENDING_MAX_MS,
+// poi scompare.
 const EMSC_WS_URL = 'wss://www.seismicportal.eu/standing_order/websocket';
 const EMSC_MIN_MAG = 2.5;
 const EMSC_RECONNECT_MS = 5000;
+const EMSC_PENDING_MAX_MS = 15 * 60_000;
+const EMSC_PENDING_CAP = 40;
 let emscWs = null;
 let emscReconnectTimer = null;
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Confronto euristico: EMSC e USGS non condividono un id comune, quindi si
+// considera "lo stesso evento" quando tempo, magnitudo e posizione sono
+// abbastanza vicini da escludere un caso di due sismi distinti e simultanei.
+function isSameEmscUsgsEvent(usgsQ, emscQ) {
+  return Math.abs(usgsQ.time - emscQ.time) < 6 * 60_000 &&
+    Math.abs(usgsQ.mag - emscQ.mag) < 0.5 &&
+    haversineKm(usgsQ.lat, usgsQ.lng, emscQ.lat, emscQ.lng) < 150;
+}
 
 function connectEmsc() {
   if (!state.emscLive || emscWs) return;
@@ -788,7 +815,10 @@ function connectEmsc() {
     if (msg.action !== 'create') return; // "update" = revisione di un evento già notificato
     const p = msg.data && msg.data.properties;
     if (!p || p.mag == null || p.mag < EMSC_MIN_MAG || p.lat == null || p.lon == null) return;
+    const id = 'emsc-' + (p.unid || `${p.time}-${p.lat}-${p.lon}`);
+    if (state.emscPending.some(e => e.id === id) || state.quakes.some(q => q.id === id)) return;
     const q = {
+      id,
       mag: p.mag,
       place: p.flynn_region || 'Località sconosciuta',
       time: Date.parse(p.time) || Date.now(),
@@ -796,7 +826,14 @@ function connectEmsc() {
       lat: p.lat,
       lng: p.lon,
       tsunami: false,
+      source: 'emsc',
     };
+    state.emscPending.push(q);
+    if (state.emscPending.length > EMSC_PENDING_CAP) state.emscPending.shift();
+    if (!state.replay.active && !state.selectedDay) {
+      state.quakes = [q, ...state.quakes];
+      render();
+    }
     showToast(q, true, { label: '⚡ EMSC in diretta', shareable: false });
     beep(q.mag);
   };
@@ -813,6 +850,11 @@ function disconnectEmsc() {
   clearTimeout(emscReconnectTimer);
   emscReconnectTimer = null;
   if (emscWs) { emscWs.onclose = null; emscWs.close(); emscWs = null; }
+  if (state.emscPending.length) {
+    state.quakes = state.quakes.filter(q => q.source !== 'emsc');
+    state.emscPending = [];
+    render();
+  }
 }
 
 // ---------- Fetch e polling ----------
@@ -822,9 +864,22 @@ async function loadFeed() {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const quakes = parseFeed(await r.json());
 
-    // Rileva nuovi eventi (non al primo caricamento)
+    // Ogni evento EMSC "in sospeso" confermato da USGS (stesso tempo/mag/
+    // posizione, vedi isSameEmscUsgsEvent) esce dai sospesi: la voce ufficiale
+    // USGS lo sostituisce senza un secondo toast. Chi resta in sospeso troppo
+    // a lungo (EMSC_PENDING_MAX_MS) viene scartato: USGS non l'ha mai ripreso.
+    const confirmedIds = new Set();
+    const now = Date.now();
+    state.emscPending = state.emscPending.filter(eq => {
+      const match = quakes.find(u => isSameEmscUsgsEvent(u, eq));
+      if (match) { confirmedIds.add(match.id); return false; }
+      return now - eq.time < EMSC_PENDING_MAX_MS;
+    });
+
+    // Rileva nuovi eventi (non al primo caricamento) — esclusi quelli già
+    // notificati poco prima come evento EMSC in diretta.
     if (!state.firstLoad) {
-      const fresh = quakes.filter(q => !state.seenIds.has(q.id));
+      const fresh = quakes.filter(q => !state.seenIds.has(q.id) && !confirmedIds.has(q.id));
       for (const q of fresh.slice(0, 4)) {
         showToast(q, true);
         beep(q.mag);
@@ -835,9 +890,9 @@ async function loadFeed() {
     }
     quakes.forEach(q => state.seenIds.add(q.id));
 
-    state.quakes = quakes;
+    state.quakes = [...state.emscPending, ...quakes].sort((a, b) => b.time - a.time);
     state.firstLoad = false;
-    setLive(true, quakes.length);
+    setLive(true, state.quakes.length);
     render();
   } catch (err) {
     console.error('Feed USGS non raggiungibile:', err);

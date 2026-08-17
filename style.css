@@ -228,6 +228,7 @@ main { height: 100%; }
 .q-info { flex: 1; min-width: 0; }
 .q-place { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .q-meta { font-size: 11px; color: var(--text-dim); }
+.q-pending { font-size: 10px; opacity: .8; }
 
 .q-share {
   background: none;
