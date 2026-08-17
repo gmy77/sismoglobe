@@ -39,10 +39,27 @@ html, body {
   flex-wrap: wrap;
 }
 
-#brand { display: flex; align-items: center; gap: 10px; }
+#brand { display: flex; align-items: flex-start; gap: 10px; }
 #brand .logo { font-size: 28px; }
 #brand h1 { font-size: 18px; letter-spacing: 1px; }
 #brand .sub { font-size: 12px; color: var(--text-dim); }
+
+#source-badges { display: flex; gap: 6px; margin-top: 6px; }
+.src-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  padding: 3px 9px;
+  transition: color .15s, border-color .15s;
+}
+.src-badge:hover { color: var(--accent); border-color: var(--accent); }
+
+.src-badge-logo { padding: 4px 10px; display: flex; align-items: center; }
+.src-badge-logo img { height: 14px; width: auto; display: block; }
 
 #stats { display: flex; gap: 18px; }
 .stat { display: flex; flex-direction: column; align-items: center; min-width: 62px; }
