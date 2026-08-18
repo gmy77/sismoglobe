@@ -30,14 +30,16 @@ html, body {
   top: 0; left: 0; right: 0;
   z-index: 20;
   display: flex;
-  align-items: center;
-  gap: 22px;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--panel-border);
   backdrop-filter: blur(8px);
-  flex-wrap: wrap;
 }
+
+#topbar-top { display: flex; align-items: flex-start; gap: 22px; }
+#topbar-bottom { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; row-gap: 6px; }
 
 #brand { display: flex; align-items: flex-start; gap: 10px; }
 #brand .logo { font-size: 28px; }
@@ -70,7 +72,6 @@ html, body {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-left: auto;
   font-size: 12px;
   color: var(--text-dim);
 }
@@ -96,7 +97,7 @@ html, body {
 #controls .chk { cursor: pointer; user-select: none; }
 #mag-val { color: #fff; font-weight: 700; min-width: 20px; text-align: right; }
 
-#live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+#live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); margin-left: auto; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #666; }
 .dot.ok { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; animation: pulse 2s infinite; }
 .dot.err { background: #ff3b30; box-shadow: 0 0 8px #ff3b30; }
