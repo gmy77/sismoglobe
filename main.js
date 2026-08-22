@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.6.0';
+const APP_VERSION = 'v1.6.1';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -594,7 +594,7 @@ function render() {
   renderStats();
 }
 
-const LIST_CAP = 300; // oltre, il DOM (mese ~11.000 eventi) rallenterebbe troppo
+const LIST_CAP = 500; // oltre, il DOM (mese ~11.000 eventi) rallenterebbe troppo
 
 function renderList(vis) {
   const ul = $('quake-list');
