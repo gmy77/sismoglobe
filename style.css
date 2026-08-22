@@ -450,6 +450,129 @@ body.info-open #footer { display: none; }   /* la guida ha già i suoi link in f
 #footer a:hover { text-decoration: underline; }
 #app-version { color: #fff; font-weight: 600; }
 
+/* ---------- Mobile (<768px) ---------- */
+@media (max-width: 767px) {
+  :root { --topbar-h: 56px; }
+
+  #topbar {
+    grid-template-columns: auto auto 1fr;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  #brand-logo { font-size: 24px; }
+  #brand h1 { font-size: 14px; letter-spacing: 0.5px; }
+  #brand .sub { display: none; }
+
+  #topbar-main { gap: 3px; }
+  #topbar-top { gap: 8px; }
+  #topbar-bottom { display: none; }
+  #stats { gap: 12px; }
+  .stat { min-width: 50px; }
+  .stat-val { font-size: 14px; }
+  .stat-lab { font-size: 9px; }
+
+  #panel {
+    position: fixed;
+    left: 0; top: calc(var(--topbar-h) + 0px); bottom: 0;
+    width: 280px;
+    z-index: 25;
+    transform: translateX(-100%);
+    transition: transform .3s ease;
+    border-right: 1px solid var(--panel-border);
+    border-radius: 0;
+    gap: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--panel);
+  }
+
+  #panel.open { transform: translateX(0); }
+  #panel section { padding: 10px; font-size: 13px; }
+  #panel h2 { font-size: 12px; }
+
+  #panel-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 24;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s ease;
+  }
+
+  #panel.open ~ #panel-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #btn-hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 32px; height: 32px;
+    background: none;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+    gap: 4px;
+    padding: 0;
+    margin-right: 4px;
+  }
+
+  #btn-hamburger span {
+    display: block;
+    width: 16px; height: 2px;
+    background: currentColor;
+    border-radius: 1px;
+  }
+
+  #btn-hamburger:hover { border-color: var(--accent); }
+
+  #controls { gap: 10px; font-size: 11px; }
+  #controls label.win-label { display: none; }
+  #controls select, #controls input[type=range] { font-size: 11px; }
+  #controls input[type=range] { width: 60px; }
+
+  #live { font-size: 10px; }
+
+  #quake-list li { padding: 6px 5px; font-size: 12px; }
+  .q-share { padding: 4px 6px; font-size: 16px; opacity: .6; }
+
+  .replay-row button { padding: 4px 8px; font-size: 12px; }
+  .bar .tip { font-size: 11px; }
+
+  #info {
+    top: calc(var(--topbar-h) + 12px);
+    right: 12px; left: 12px;
+    bottom: 12px;
+    width: auto;
+    padding: 16px 18px 18px;
+    border-radius: 10px;
+  }
+
+  #info h2 { font-size: 14px; margin: 16px 0 6px; }
+  #info { font-size: 13px; }
+  #info p { margin-bottom: 3px; }
+
+  #toasts {
+    top: calc(var(--topbar-h) + 8px);
+    right: 8px;
+    max-width: 280px;
+  }
+
+  .toast { padding: 8px 10px; font-size: 12px; }
+  .toast .t-title { font-size: 13px; }
+  .toast .t-body { font-size: 12px; }
+
+  #footer { display: none; }
+  #btn-info { padding: 3px 7px; font-size: 11px; }
+
+  #custom-tip { max-width: 240px; font-size: 11px; }
+}
+
 @media (max-width: 900px) {
   #panel { width: 260px; }
   #brand .sub { display: none; }

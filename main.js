@@ -978,6 +978,29 @@ function toggleInfo(open) {
 }
 $('btn-info').onclick = () => toggleInfo();
 $('info-close').onclick = () => toggleInfo(false);
+
+// Mobile: hamburger menu + panel drawer
+const panel = $('panel');
+const backdrop = $('panel-backdrop');
+const hamburger = $('btn-hamburger');
+
+const togglePanel = (show) => {
+  panel.classList.toggle('open', show !== false);
+};
+
+hamburger.onclick = () => togglePanel();
+backdrop.onclick = () => togglePanel(false);
+
+// Chiudi il panel quando clicchi su un link o controllo
+panel.addEventListener('click', (e) => {
+  if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') {
+    // Non chiudere subito per select (altrimenti non si apre), solo per click su link/button
+    if (e.target.tagName !== 'SELECT') {
+      setTimeout(() => togglePanel(false), 200);
+    }
+  }
+});
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleInfo(false); });
 
 // Pausa rotazione durante l'interazione
