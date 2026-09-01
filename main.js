@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.6.1';
+const APP_VERSION = 'v1.6.2';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -193,7 +193,10 @@ speedUpRaycasting();
 
 globe.controls().autoRotate = true;
 globe.controls().autoRotateSpeed = 0.4;
-globe.pointOfView({ lat: 20, lng: 10, altitude: 2.2 });
+// altitude 2.2 lasciava il polo nord del globo dietro la topbar fissa in
+// alto: bisognava zoommare indietro a mano a ogni apertura. Con 2.6 il globo
+// parte un po' più piccolo ma tutto visibile sotto la barra.
+globe.pointOfView({ lat: 20, lng: 10, altitude: 2.6 });
 
 // Centra il globo nello spazio libero a destra del pannello: il canvas viene
 // allargato oltre il bordo destro (nascosto da overflow:hidden) così che il
@@ -858,11 +861,19 @@ function disconnectEmsc() {
 }
 
 // ---------- Fetch e polling ----------
+let feedRequestSeq = 0;
 async function loadFeed() {
+  const seq = ++feedRequestSeq;
   try {
     const r = await fetch(USGS + FEEDS[state.window], { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const quakes = parseFeed(await r.json());
+    // Se nel frattempo la finestra è cambiata di nuovo (es. 24h→7g→24h fatto
+    // in rapida successione), questa risposta è ormai superata: scartarla,
+    // altrimenti una risposta "7g" arrivata in ritardo sovrascrive la scelta
+    // corrente e il globo resta bloccato sulla finestra sbagliata fino al
+    // prossimo poll.
+    if (seq !== feedRequestSeq) return;
 
     // Ogni evento EMSC "in sospeso" confermato da USGS (stesso tempo/mag/
     // posizione, vedi isSameEmscUsgsEvent) esce dai sospesi: la voce ufficiale
