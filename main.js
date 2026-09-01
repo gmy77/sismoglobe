@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.6.2';
+const APP_VERSION = 'v1.6.3';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -11,6 +11,7 @@ const REPLAY_RANGE_MS = 30 * 86400_000;   // copre l'intero istogramma dei 30 gi
 const REPLAY_TRAIL_MS = 24 * 3600_000;    // finestra di eventi visibili in un dato istante del replay
 const REPLAY_TICK_MS = 200;
 const REPLAY_STEP_MS = REPLAY_RANGE_MS / 300; // ~48s reali per rivedere tutto il mese
+const FLY_MIN_MAG = 4.5; // soglia magnitudo per il volo automatico "vola sui nuovi"
 
 // ---------- Stato ----------
 const state = {
@@ -836,6 +837,10 @@ function connectEmsc() {
     if (!state.replay.active && !state.selectedDay) {
       state.quakes = [q, ...state.quakes];
       render();
+      // Gli eventi EMSC in diretta non passavano mai da qui: prima "vola sui
+      // nuovi" scattava solo al poll USGS (ogni 60s, soglia 4.5), quindi in
+      // pratica non si vedeva quasi mai volare il globo.
+      if (state.flyToNew && q.mag >= FLY_MIN_MAG) flyTo(q, 1.6);
     }
     showToast(q, true, { label: '⚡ EMSC in diretta', shareable: false });
     beep(q.mag);
@@ -897,7 +902,7 @@ async function loadFeed() {
         markNewInList(q.id);
       }
       const biggest = fresh.reduce((a, b) => (!a || b.mag > a.mag ? b : a), null);
-      if (biggest && state.flyToNew && biggest.mag >= 4.5) flyTo(biggest, 1.6);
+      if (biggest && state.flyToNew && biggest.mag >= FLY_MIN_MAG) flyTo(biggest, 1.6);
     }
     quakes.forEach(q => state.seenIds.add(q.id));
 
