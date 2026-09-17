@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.7.1';
+const APP_VERSION = 'v1.8.0';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -18,7 +18,9 @@ const FLY_MIN_MAG = 4.5; // soglia magnitudo per il volo automatico "vola sui nu
 // Il worker sismo-fvg (progetto ECHO, gmy77/sismo-echo) li ingerisce da INGV
 // ogni volta che viene aggiornato (cron 4x/giorno + "Aggiorna ora" manuale),
 // li salva in D1 e li espone su questo endpoint pubblico (CORS aperto).
-const INGV_API = 'https://sismo-fvg.gimmy077.workers.dev/api/events';
+const SISMOFVG_BASE = 'https://sismo-fvg.gimmy077.workers.dev';
+const INGV_API = SISMOFVG_BASE + '/api/events';
+const SOLAR_API = SISMOFVG_BASE + '/api/solar'; // stesso worker: indice Kp giornaliero (NOAA SWPC), utile per l'ipotesi di correlazione sismo/attività solare
 const INGV_POLL_MS = 10 * 60_000; // stesso ritmo del refresh mensile: il worker non aggiorna più spesso di così
 const INGV_MIN_MAG = 0.3;
 const WINDOW_MS = { day: 86400_000, week: 7 * 86400_000, month: REPLAY_RANGE_MS };
@@ -39,6 +41,7 @@ const state = {
   emscLive: true,
   emscPending: [], // eventi EMSC non ancora confermati dal feed USGS
   ingvQuakes: [],  // cache degli eventi FVG/CF da sismo-fvg (fonte INGV), indipendente dalla finestra
+  kp: null,        // { day, max, avg } ultimo giorno disponibile del feed solare NOAA (via sismo-fvg), o null se non ancora caricato
 };
 
 // ---------- Utility ----------
@@ -50,6 +53,14 @@ function magColor(m) {
   if (m >= 5) return '#ff7a00';
   if (m >= 4) return '#ffb300';
   if (m >= 3) return '#ffe14d';
+  return '#68e07f';
+}
+
+// Soglie NOAA/G-scale: Kp<4 quiete, 4 attivo, 5-6 tempesta minore/moderata (G1-G2), 7+ forte e oltre.
+function kpColor(kp) {
+  if (kp >= 7) return '#ff2d78';
+  if (kp >= 5) return '#ff7a00';
+  if (kp >= 4) return '#ffe14d';
   return '#68e07f';
 }
 
@@ -655,6 +666,16 @@ function renderStats() {
   $('st-hour').textContent = hour.length;
   $('st-max').textContent = maxQ ? 'M ' + maxQ.mag.toFixed(1) : '–';
   $('st-energy').textContent = fmtEnergy(last24.reduce((s, q) => s + energyJoules(q.mag), 0));
+
+  const kpEl = $('st-kp');
+  if (state.kp) {
+    kpEl.textContent = state.kp.max.toFixed(1);
+    kpEl.style.color = kpColor(state.kp.max);
+    $('st-kp-box').title = `Indice geomagnetico Kp (NOAA SWPC) — massimo del ${state.kp.day}: ${state.kp.max.toFixed(1)}, media ${state.kp.avg.toFixed(1)}. Via sismo-fvg.`;
+  } else {
+    kpEl.textContent = '–';
+    kpEl.style.color = '';
+  }
 }
 
 function renderHistogram() {
@@ -916,31 +937,53 @@ function mergeIngvIntoState() {
   state.quakes = [...quakesOther, ...inWindow].sort((a, b) => b.time - a.time);
 }
 
-async function loadIngv() {
-  try {
-    const r = await fetch(`${INGV_API}?giorni=30&mag=${INGV_MIN_MAG}`, { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
-    state.ingvQuakes = (data.events || [])
-      .map(e => ({
-        id: 'ingv-' + e.event_id,
-        lat: e.latitudine,
-        lng: e.longitudine,
-        depth: e.profondita,
-        mag: e.magnitudine,
-        place: e.localita,
-        time: parseIngvTime(e.data_ora),
-        tsunami: false,
-        source: 'ingv',
-      }))
-      .filter(q => q.time); // scarta eventuali orari non interpretabili
-    mergeIngvIntoState();
-    render();
-    renderHistogram();
-    renderStats();
-  } catch (err) {
-    console.error('Feed INGV (sismo-fvg) non raggiungibile:', err);
+// Carica in un colpo solo i due dataset esposti da sismo-fvg: eventi INGV
+// (FVG/Campi Flegrei) e indice geomagnetico Kp. Le due fetch sono indipendenti
+// (Promise.allSettled): se una delle due fallisce l'altra resta comunque utile,
+// invece di perdere tutto per un problema isolato a un solo endpoint.
+async function loadSismoFvg() {
+  const [evRes, solRes] = await Promise.allSettled([
+    fetch(`${INGV_API}?giorni=30&mag=${INGV_MIN_MAG}`, { cache: 'no-store' }),
+    fetch(SOLAR_API, { cache: 'no-store' }),
+  ]);
+
+  if (evRes.status === 'fulfilled' && evRes.value.ok) {
+    try {
+      const data = await evRes.value.json();
+      state.ingvQuakes = (data.events || [])
+        .map(e => ({
+          id: 'ingv-' + e.event_id,
+          lat: e.latitudine,
+          lng: e.longitudine,
+          depth: e.profondita,
+          mag: e.magnitudine,
+          place: e.localita,
+          time: parseIngvTime(e.data_ora),
+          tsunami: false,
+          source: 'ingv',
+        }))
+        .filter(q => q.time); // scarta eventuali orari non interpretabili
+      mergeIngvIntoState();
+    } catch (err) { console.error('Eventi INGV (sismo-fvg) non interpretabili:', err); }
+  } else {
+    console.error('Eventi INGV (sismo-fvg) non raggiungibili:', evRes.reason || evRes.value?.status);
   }
+
+  if (solRes.status === 'fulfilled' && solRes.value.ok) {
+    try {
+      const days = await solRes.value.json();
+      if (Array.isArray(days) && days.length) {
+        const latest = days[0]; // query ordina già DESC per giorno
+        state.kp = { day: latest.giorno, max: latest.kp_max, avg: latest.kp_avg };
+      }
+    } catch (err) { console.error('Dati solari (sismo-fvg) non interpretabili:', err); }
+  } else {
+    console.error('Dati solari (sismo-fvg) non raggiungibili:', solRes.reason || solRes.value?.status);
+  }
+
+  render();
+  renderHistogram();
+  renderStats();
 }
 
 // ---------- Fetch e polling ----------
@@ -1150,15 +1193,15 @@ $('app-version').textContent = 'SismoGlobe ' + APP_VERSION;
   const sharedId = new URLSearchParams(location.search).get('id');
   await loadFeed();
   const monthLoaded = loadMonth();
-  const ingvLoaded = loadIngv();
+  const sismoFvgLoaded = loadSismoFvg();
   $('loading').classList.add('done');
   setInterval(loadFeed, POLL_MS);
   setInterval(loadMonth, MONTH_POLL_MS);
-  setInterval(loadIngv, INGV_POLL_MS);
+  setInterval(loadSismoFvg, INGV_POLL_MS);
   connectEmsc();
   if (sharedId) {
     await monthLoaded;
-    await ingvLoaded; // il link condiviso potrebbe puntare a un evento INGV
+    await sismoFvgLoaded; // il link condiviso potrebbe puntare a un evento INGV
     openSharedQuake(sharedId);
   }
 })();
