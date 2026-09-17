@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.6.3';
+const APP_VERSION = 'v1.7.0';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -12,6 +12,16 @@ const REPLAY_TRAIL_MS = 24 * 3600_000;    // finestra di eventi visibili in un d
 const REPLAY_TICK_MS = 200;
 const REPLAY_STEP_MS = REPLAY_RANGE_MS / 300; // ~48s reali per rivedere tutto il mese
 const FLY_MIN_MAG = 4.5; // soglia magnitudo per il volo automatico "vola sui nuovi"
+
+// USGS registra in modo completo solo sopra M4-4.5 fuori dagli USA: i
+// micro-sismi del Friuli Venezia Giulia (M0.3-3) non compaiono quasi mai.
+// Il worker sismo-fvg (progetto ECHO, gmy77/sismo-echo) li ingerisce da INGV
+// ogni volta che viene aggiornato (cron 4x/giorno + "Aggiorna ora" manuale),
+// li salva in D1 e li espone su questo endpoint pubblico (CORS aperto).
+const INGV_API = 'https://sismo-fvg.gimmy077.workers.dev/api/events';
+const INGV_POLL_MS = 10 * 60_000; // stesso ritmo del refresh mensile: il worker non aggiorna più spesso di così
+const INGV_MIN_MAG = 0.3;
+const WINDOW_MS = { day: 86400_000, week: 7 * 86400_000, month: REPLAY_RANGE_MS };
 
 // ---------- Stato ----------
 const state = {
@@ -28,6 +38,7 @@ const state = {
   replay: { active: false, playing: false, t: 0 }, // t = ms trascorsi dall'inizio della finestra di 30gg
   emscLive: true,
   emscPending: [], // eventi EMSC non ancora confermati dal feed USGS
+  ingvQuakes: [],  // cache degli eventi FVG/CF da sismo-fvg (fonte INGV), indipendente dalla finestra
 };
 
 // ---------- Utility ----------
@@ -610,12 +621,18 @@ function renderList(vis) {
   for (const q of shown) {
     const li = document.createElement('li');
     const isEmsc = q.source === 'emsc';
+    const isIngv = q.source === 'ingv';
     const shareBtn = isEmsc ? '' :
       `<button class="q-share" type="button" title="Copia un link diretto a questo evento">🔗</button>`;
+    const srcTag = isEmsc
+      ? ' <span class="q-pending" title="Notifica EMSC in attesa di conferma dal feed USGS">⚡</span>'
+      : isIngv
+        ? ' <span class="q-pending" title="Fonte: INGV via sismo-fvg.gimmycloud.net — sismicità regionale FVG/Campi Flegrei, non presente sul feed USGS">🇮🇹</span>'
+        : '';
     li.innerHTML = `
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
       <div class="q-info">
-        <div class="q-place">${q.place}${isEmsc ? ' <span class="q-pending" title="Notifica EMSC in attesa di conferma dal feed USGS">⚡</span>' : ''}</div>
+        <div class="q-place">${q.place}${srcTag}</div>
         <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${fmtDepth(q.depth)}</div>
       </div>
       ${shareBtn}`;
@@ -865,6 +882,67 @@ function disconnectEmsc() {
   }
 }
 
+// ---------- INGV / sismo-fvg (micro-sismi Friuli Venezia Giulia + Campi Flegrei) ----------
+// Stesso spirito della fusione EMSC/USGS sopra: sismo-fvg e USGS non
+// condividono un id comune, quindi un evento abbastanza forte da comparire su
+// entrambi (raro, ma capita per i sismi FVG più forti) va scartato da un lato
+// per non mostrarlo due volte sul globo.
+function isDuplicateOfUsgs(list, ev) {
+  return list.some(o => o.source !== 'ingv' &&
+    Math.abs(o.time - ev.time) < 6 * 60_000 &&
+    Math.abs(o.mag - ev.mag) < 0.5 &&
+    haversineKm(o.lat, o.lng, ev.lat, ev.lng) < 50);
+}
+
+// L'endpoint sismo-fvg salva l'orario INGV con microsecondi ("...54.320000",
+// senza 'Z'): Date.parse lo ignorerebbe silenziosamente. Troncato a millisecondi
+// e con 'Z' esplicito, è un ISO valido (i dati INGV sono in UTC).
+function parseIngvTime(s) {
+  return Date.parse(String(s).slice(0, 23) + 'Z');
+}
+
+// Rimescola gli eventi INGV nella finestra corrente e nel mese, senza
+// duplicare eventi USGS della stessa area/istante. Non chiama render(): lo fa
+// il chiamante, per non ridisegnare due volte in loadFeed()/loadMonth().
+function mergeIngvIntoState() {
+  const monthOther = state.monthQuakes.filter(q => q.source !== 'ingv');
+  const newMonth = state.ingvQuakes.filter(ev => !isDuplicateOfUsgs(monthOther, ev));
+  state.monthQuakes = [...monthOther, ...newMonth].sort((a, b) => b.time - a.time);
+
+  const now = Date.now();
+  const windowMs = WINDOW_MS[state.window];
+  const quakesOther = state.quakes.filter(q => q.source !== 'ingv');
+  const inWindow = state.ingvQuakes.filter(ev => now - ev.time < windowMs && !isDuplicateOfUsgs(quakesOther, ev));
+  state.quakes = [...quakesOther, ...inWindow].sort((a, b) => b.time - a.time);
+}
+
+async function loadIngv() {
+  try {
+    const r = await fetch(`${INGV_API}?giorni=30&mag=${INGV_MIN_MAG}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    state.ingvQuakes = (data.events || [])
+      .map(e => ({
+        id: 'ingv-' + e.event_id,
+        lat: e.latitudine,
+        lng: e.longitudine,
+        depth: e.profondita,
+        mag: e.magnitudine,
+        place: e.localita,
+        time: parseIngvTime(e.data_ora),
+        tsunami: false,
+        source: 'ingv',
+      }))
+      .filter(q => q.time); // scarta eventuali orari non interpretabili
+    mergeIngvIntoState();
+    render();
+    renderHistogram();
+    renderStats();
+  } catch (err) {
+    console.error('Feed INGV (sismo-fvg) non raggiungibile:', err);
+  }
+}
+
 // ---------- Fetch e polling ----------
 let feedRequestSeq = 0;
 async function loadFeed() {
@@ -907,6 +985,7 @@ async function loadFeed() {
     quakes.forEach(q => state.seenIds.add(q.id));
 
     state.quakes = [...state.emscPending, ...quakes].sort((a, b) => b.time - a.time);
+    mergeIngvIntoState(); // riaggiunge gli eventi FVG/CF cache: loadFeed() li avrebbe appena sovrascritti
     state.firstLoad = false;
     setLive(true, state.quakes.length);
     render();
@@ -929,6 +1008,7 @@ async function loadMonth() {
     const r = await fetch(USGS + FEEDS.month, { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     state.monthQuakes = parseFeed(await r.json());
+    mergeIngvIntoState(); // riaggiunge gli eventi FVG/CF cache: loadMonth() li avrebbe appena sovrascritti
     renderHistogram();
     renderStats();
   } catch (err) {
@@ -1056,12 +1136,15 @@ $('app-version').textContent = 'SismoGlobe ' + APP_VERSION;
   const sharedId = new URLSearchParams(location.search).get('id');
   await loadFeed();
   const monthLoaded = loadMonth();
+  const ingvLoaded = loadIngv();
   $('loading').classList.add('done');
   setInterval(loadFeed, POLL_MS);
   setInterval(loadMonth, MONTH_POLL_MS);
+  setInterval(loadIngv, INGV_POLL_MS);
   connectEmsc();
   if (sharedId) {
     await monthLoaded;
+    await ingvLoaded; // il link condiviso potrebbe puntare a un evento INGV
     openSharedQuake(sharedId);
   }
 })();
