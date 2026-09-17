@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.6.3">
+<link rel="stylesheet" href="style.css?v=1.7.1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -166,13 +166,18 @@
 <main>
   <aside id="panel">
     <section id="source-box">
-      <h2>Sulla fonte dati</h2>
-      <p>Terremoti rilevati dalle reti sismiche mondiali, raccolti dallo <strong>USGS</strong> (United States
-      Geological Survey) e in diretta dallo <strong>EMSC</strong> (European-Mediterranean Seismological Centre).
-      Finestra corrente aggiornata ogni <strong>60 secondi</strong>, storico dei 30 giorni ogni 10 minuti.
-      La micro-sismicità del <strong>Friuli Venezia Giulia</strong> e dei <strong>Campi Flegrei</strong> (spesso
-      sotto la soglia rilevata da USGS) arriva invece dall'<strong>INGV</strong>, tramite il progetto
-      <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener">sismo-fvg</a> — badge 🇮🇹.</p>
+      <h2 id="source-toggle" role="button" tabindex="0" aria-expanded="true" aria-controls="source-body">
+        Sulla fonte dati
+        <span class="collapse-arrow">▾</span>
+      </h2>
+      <div id="source-body" class="collapsible">
+        <p>Terremoti rilevati dalle reti sismiche mondiali, raccolti dallo <strong>USGS</strong> (United States
+        Geological Survey) e in diretta dallo <strong>EMSC</strong> (European-Mediterranean Seismological Centre).
+        Finestra corrente aggiornata ogni <strong>60 secondi</strong>, storico dei 30 giorni ogni 10 minuti.
+        La micro-sismicità del <strong>Friuli Venezia Giulia</strong> e dei <strong>Campi Flegrei</strong> (spesso
+        sotto la soglia rilevata da USGS) arriva invece dall'<strong>INGV</strong>, tramite il progetto
+        <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener">sismo-fvg</a> — badge 🇮🇹.</p>
+      </div>
     </section>
 
     <section id="histo-box">
@@ -324,6 +329,6 @@
 
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-<script src="main.js?v=1.7.0"></script>
+<script src="main.js?v=1.7.1"></script>
 </body>
 </html>

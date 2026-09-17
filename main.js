@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.7.0';
+const APP_VERSION = 'v1.7.1';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -1048,6 +1048,20 @@ $('chk-emsc').onchange = e => {
   state.emscLive = e.target.checked;
   if (state.emscLive) connectEmsc(); else disconnectEmsc();
 };
+// Box "Sulla fonte dati" comprimibile: un click sull'intestazione lo riduce,
+// così istogramma e lista terremoti sotto guadagnano spazio (segnalato da
+// Gimmy: nel pannello sinistro si vede sempre meno lista scendendo di finestra).
+function toggleSourceBox(collapse) {
+  const box = $('source-box');
+  const show = collapse === undefined ? !box.classList.contains('collapsed') : !collapse;
+  box.classList.toggle('collapsed', !show);
+  $('source-toggle').setAttribute('aria-expanded', String(show));
+}
+$('source-toggle').addEventListener('click', () => toggleSourceBox());
+$('source-toggle').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSourceBox(); }
+});
+
 $('day-reset').onclick = () => selectDay(null);
 $('country-reset').onclick = () => selectCountry(null);
 
