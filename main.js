@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.8.2';
+const APP_VERSION = 'v1.8.3';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -41,6 +41,7 @@ const state = {
   emscLive: true,
   emscPending: [], // eventi EMSC non ancora confermati dal feed USGS
   ingvQuakes: [],  // cache degli eventi FVG/CF da sismo-fvg (fonte INGV), indipendente dalla finestra
+  live: { ok: null, at: null }, // esito (true/false, null = in attesa) e Date dell'ultimo poll USGS
   kp: null,        // { day, max, avg } ultimo giorno disponibile del feed solare NOAA (via sismo-fvg), o null se non ancora caricato
 };
 
@@ -618,6 +619,7 @@ function render() {
 
   renderList(vis);
   renderStats();
+  renderLive(); // eventi EMSC/INGV arrivano fuori dal poll USGS: il contatore LIVE deve seguire il globo
 }
 
 const LIST_CAP = 500; // oltre, il DOM (mese ~11.000 eventi) rallenterebbe troppo
@@ -626,9 +628,13 @@ function renderList(vis) {
   const ul = $('quake-list');
   ul.innerHTML = '';
   const shown = vis.slice(0, LIST_CAP);
+  // Gli eventi EMSC in sospeso sono sul globo ma non ancora nel feed USGS (e
+  // quindi non nelle statistiche): dichiararli spiega la differenza di conteggio.
+  const pending = vis.filter(q => q.source === 'emsc').length;
+  const pendingTxt = pending ? `, di cui ${pending} ⚡ EMSC in attesa` : '';
   $('list-count').textContent = vis.length > LIST_CAP
-    ? `(${shown.length} di ${vis.length})`
-    : `(${vis.length} visibili)`;
+    ? `(${shown.length} di ${vis.length}${pendingTxt})`
+    : `(${vis.length} visibili${pendingTxt})`;
   for (const q of shown) {
     const li = document.createElement('li');
     const isEmsc = q.source === 'emsc';
@@ -1029,7 +1035,7 @@ async function loadFeed() {
     state.quakes = [...state.emscPending, ...quakes].sort((a, b) => b.time - a.time);
     mergeIngvIntoState(); // riaggiunge gli eventi FVG/CF cache: loadFeed() li avrebbe appena sovrascritti
     state.firstLoad = false;
-    setLive(true, state.quakes.length);
+    setLive(true);
     render();
   } catch (err) {
     console.error('Feed USGS non raggiungibile:', err);
@@ -1058,11 +1064,21 @@ async function loadMonth() {
   }
 }
 
-function setLive(ok, count) {
-  const dot = $('live-dot');
-  dot.className = 'dot ' + (ok ? 'ok' : 'err');
+// state.live conserva esito e ora dell'ultimo poll USGS; il conteggio invece è
+// letto da state.quakes a ogni renderLive(), così resta allineato al globo
+// anche quando un evento EMSC/INGV arriva tra un poll e l'altro.
+function setLive(ok) {
+  state.live.ok = ok;
+  if (ok) state.live.at = new Date();
+  renderLive();
+}
+
+function renderLive() {
+  const { ok, at } = state.live;
+  if (ok === null) return; // nessun poll ancora concluso: resta "connessione…"
+  $('live-dot').className = 'dot ' + (ok ? 'ok' : 'err');
   $('live-text').textContent = ok
-    ? `LIVE · ${count} eventi · agg. ${new Date().toLocaleTimeString('it-IT')}`
+    ? `LIVE · ${state.quakes.length} eventi · agg. ${at.toLocaleTimeString('it-IT')}`
     : 'feed non raggiungibile — riprovo…';
 }
 
