@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.8.5';
+const APP_VERSION = 'v1.8.6';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
