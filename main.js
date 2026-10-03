@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.8.3';
+const APP_VERSION = 'v1.8.4';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -23,6 +23,11 @@ const INGV_API = SISMOFVG_BASE + '/api/events';
 const SOLAR_API = SISMOFVG_BASE + '/api/solar'; // stesso worker: indice Kp giornaliero (NOAA SWPC), utile per l'ipotesi di correlazione sismo/attività solare
 const INGV_POLL_MS = 10 * 60_000; // stesso ritmo del refresh mensile: il worker non aggiorna più spesso di così
 const INGV_MIN_MAG = 0.3;
+// Catalogo EMSC (FDSN, CORS aperto): USGS fuori dagli USA è completo solo
+// sopra M4-4.5, EMSC aggiunge ~170 eventi M2.5+ al giorno che USGS non ha
+// (Cile, Indonesia, Grecia, sciami in Kamchatka...). Stesso ritmo di INGV.
+const EMSC_FDSN = 'https://www.seismicportal.eu/fdsnws/event/1/query';
+const EMSC_POLL_MS = 10 * 60_000;
 const WINDOW_MS = { day: 86400_000, week: 7 * 86400_000, month: REPLAY_RANGE_MS };
 
 // ---------- Stato ----------
@@ -41,6 +46,7 @@ const state = {
   emscLive: true,
   emscPending: [], // eventi EMSC non ancora confermati dal feed USGS
   ingvQuakes: [],  // cache degli eventi FVG/CF da sismo-fvg (fonte INGV), indipendente dalla finestra
+  emscQuakes: [],  // cache 30 giorni del catalogo EMSC (fonte 'emsc-cat'), indipendente dalla finestra
   live: { ok: null, at: null }, // esito (true/false, null = in attesa) e Date dell'ultimo poll USGS
   kp: null,        // { day, max, avg } ultimo giorno disponibile del feed solare NOAA (via sismo-fvg), o null se non ancora caricato
 };
@@ -628,8 +634,9 @@ function renderList(vis) {
   const ul = $('quake-list');
   ul.innerHTML = '';
   const shown = vis.slice(0, LIST_CAP);
-  // Gli eventi EMSC in sospeso sono sul globo ma non ancora nel feed USGS (e
-  // quindi non nelle statistiche): dichiararli spiega la differenza di conteggio.
+  // Gli eventi EMSC in sospeso sono sul globo ma non ancora nel feed USGS né nel
+  // catalogo EMSC (e quindi non nelle statistiche): dichiararli spiega la
+  // differenza di conteggio.
   const pending = vis.filter(q => q.source === 'emsc').length;
   const pendingTxt = pending ? `, di cui ${pending} ⚡ EMSC in attesa` : '';
   $('list-count').textContent = vis.length > LIST_CAP
@@ -642,10 +649,12 @@ function renderList(vis) {
     const shareBtn = isEmsc ? '' :
       `<button class="q-share" type="button" title="Copia un link diretto a questo evento">🔗</button>`;
     const srcTag = isEmsc
-      ? ' <span class="q-pending" title="Notifica EMSC in attesa di conferma dal feed USGS">⚡</span>'
+      ? ' <span class="q-pending" title="Notifica EMSC in diretta, in attesa del feed USGS o del catalogo EMSC">⚡</span>'
       : isIngv
         ? ' <span class="q-pending" title="Fonte: INGV via sismo-fvg.gimmycloud.net — sismicità regionale FVG/Campi Flegrei, non presente sul feed USGS">🇮🇹</span>'
-        : '';
+        : q.source === 'emsc-cat'
+          ? ' <span class="q-pending" title="Fonte: catalogo EMSC (European-Mediterranean Seismological Centre) — evento non presente sul feed USGS">🇪🇺</span>'
+          : '';
     li.innerHTML = `
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
       <div class="q-info">
@@ -819,13 +828,18 @@ function renderReplayFrame() {
 // Quando arriva il prossimo feed USGS, ogni evento EMSC "in sospeso" che
 // corrisponde (tempo/magnitudo/posizione vicini, vedi isSameEmscUsgsEvent) a
 // un evento USGS viene tolto dai sospesi e sostituito dalla voce ufficiale
-// USGS, senza un secondo toast/beep. Se USGS non lo conferma mai (fuori
-// catalogo o sotto soglia) resta come evento EMSC per EMSC_PENDING_MAX_MS,
+// USGS, senza un secondo toast/beep. Se USGS non lo conferma (fuori catalogo
+// o sotto soglia) lo sostituisce la stessa voce del catalogo EMSC (stesso id,
+// vedi loadEmscCatalog) al refresh successivo; altrimenti resta come evento
+// EMSC per EMSC_PENDING_MAX_MS,
 // poi scompare.
 const EMSC_WS_URL = 'wss://www.seismicportal.eu/standing_order/websocket';
 const EMSC_MIN_MAG = 2.5;
 const EMSC_RECONNECT_MS = 5000;
-const EMSC_PENDING_MAX_MS = 15 * 60_000;
+// Oltre il prossimo refresh del catalogo EMSC (10 min, più il ritardo con cui
+// EMSC pubblica): un evento solo-EMSC passa dal "sospeso" al catalogo senza
+// sparire nel frattempo.
+const EMSC_PENDING_MAX_MS = 30 * 60_000;
 const EMSC_PENDING_CAP = 40;
 let emscWs = null;
 let emscReconnectTimer = null;
@@ -908,16 +922,51 @@ function disconnectEmsc() {
   }
 }
 
-// ---------- INGV / sismo-fvg (micro-sismi Friuli Venezia Giulia + Campi Flegrei) ----------
-// Stesso spirito della fusione EMSC/USGS sopra: sismo-fvg e USGS non
-// condividono un id comune, quindi un evento abbastanza forte da comparire su
-// entrambi (raro, ma capita per i sismi FVG più forti) va scartato da un lato
-// per non mostrarlo due volte sul globo.
-function isDuplicateOfUsgs(list, ev) {
-  return list.some(o => o.source !== 'ingv' &&
-    Math.abs(o.time - ev.time) < 6 * 60_000 &&
+// ---------- Fusione delle fonti (USGS + INGV + catalogo EMSC) ----------
+// Stesso spirito della fusione EMSC/USGS sopra: le fonti non condividono un id
+// comune, quindi un evento presente su più fonti va scartato da un lato per non
+// mostrarlo due volte sul globo. Priorità: USGS, poi INGV (un sisma italiano
+// presente anche su EMSC resta con badge 🇮🇹 e dati INGV), poi EMSC.
+const SAME_EVENT_MS = 6 * 60_000;
+function isSameIngvEvent(o, ev) {
+  return Math.abs(o.time - ev.time) < SAME_EVENT_MS &&
     Math.abs(o.mag - ev.mag) < 0.5 &&
-    haversineKm(o.lat, o.lng, ev.lat, ev.lng) < 50);
+    haversineKm(o.lat, o.lng, ev.lat, ev.lng) < 50;
+}
+
+// Sul mese i confronti sarebbero ~10.000 USGS × ~7.000 EMSC = 70 milioni a ogni
+// poll: il riferimento viene ordinato per tempo una volta sola e per ogni
+// candidato si provano solo gli eventi entro ±SAME_EVENT_MS (ricerca binaria).
+function makeTimeIndex(list) {
+  const sorted = [...list].sort((a, b) => a.time - b.time);
+  return { sorted, times: sorted.map(q => q.time) };
+}
+function hasSameEvent(index, ev, same) {
+  const { sorted, times } = index;
+  const from = ev.time - SAME_EVENT_MS;
+  let lo = 0, hi = times.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid] < from) lo = mid + 1; else hi = mid;
+  }
+  for (let i = lo; i < sorted.length && times[i] <= ev.time + SAME_EVENT_MS; i++) {
+    if (same(sorted[i], ev)) return true;
+  }
+  return false;
+}
+
+const EXTRA_SOURCES = new Set(['ingv', 'emsc-cat']);
+
+// Aggiunge a una lista USGS (più eventuali EMSC in sospeso) gli eventi INGV ed
+// EMSC che non ha già, limitati alla finestra windowMs (null = tutto il mese).
+function withExtraSources(base, windowMs) {
+  const now = Date.now();
+  const inWindow = q => windowMs == null || now - q.time < windowMs;
+  const baseIndex = makeTimeIndex(base);
+  const ingv = state.ingvQuakes.filter(ev => inWindow(ev) && !hasSameEvent(baseIndex, ev, isSameIngvEvent));
+  const refIndex = makeTimeIndex([...base, ...ingv]);
+  const emsc = state.emscQuakes.filter(ev => inWindow(ev) && !hasSameEvent(refIndex, ev, isSameEmscUsgsEvent));
+  return [...base, ...ingv, ...emsc].sort((a, b) => b.time - a.time);
 }
 
 // L'endpoint sismo-fvg salva l'orario INGV con microsecondi ("...54.320000",
@@ -927,19 +976,22 @@ function parseIngvTime(s) {
   return Date.parse(String(s).slice(0, 23) + 'Z');
 }
 
-// Rimescola gli eventi INGV nella finestra corrente e nel mese, senza
+// Rimescola gli eventi INGV ed EMSC nella finestra corrente e nel mese, senza
 // duplicare eventi USGS della stessa area/istante. Non chiama render(): lo fa
 // il chiamante, per non ridisegnare due volte in loadFeed()/loadMonth().
-function mergeIngvIntoState() {
-  const monthOther = state.monthQuakes.filter(q => q.source !== 'ingv');
-  const newMonth = state.ingvQuakes.filter(ev => !isDuplicateOfUsgs(monthOther, ev));
-  state.monthQuakes = [...monthOther, ...newMonth].sort((a, b) => b.time - a.time);
+function mergeExtrasIntoState() {
+  // Un evento EMSC "in sospeso" ormai presente nel catalogo (stesso id
+  // 'emsc-<unid>') lascia il posto alla voce del catalogo, che non scade.
+  const catalogIds = new Set(state.emscQuakes.map(q => q.id));
+  state.emscPending = state.emscPending.filter(q => !catalogIds.has(q.id));
+  const strip = list => list.filter(q => !EXTRA_SOURCES.has(q.source) && !catalogIds.has(q.id));
 
-  const now = Date.now();
-  const windowMs = WINDOW_MS[state.window];
-  const quakesOther = state.quakes.filter(q => q.source !== 'ingv');
-  const inWindow = state.ingvQuakes.filter(ev => now - ev.time < windowMs && !isDuplicateOfUsgs(quakesOther, ev));
-  state.quakes = [...quakesOther, ...inWindow].sort((a, b) => b.time - a.time);
+  // Finché il feed mensile USGS non è arrivato il mese resta vuoto: con le sole
+  // fonti extra le statistiche (che lo preferiscono a state.quakes) mostrerebbero
+  // solo INGV/EMSC.
+  const monthBase = strip(state.monthQuakes);
+  state.monthQuakes = monthBase.length ? withExtraSources(monthBase, null) : [];
+  state.quakes = withExtraSources(strip(state.quakes), WINDOW_MS[state.window]);
 }
 
 // Carica in un colpo solo i due dataset esposti da sismo-fvg: eventi INGV
@@ -968,7 +1020,7 @@ async function loadSismoFvg() {
           source: 'ingv',
         }))
         .filter(q => q.time); // scarta eventuali orari non interpretabili
-      mergeIngvIntoState();
+      mergeExtrasIntoState();
     } catch (err) { console.error('Eventi INGV (sismo-fvg) non interpretabili:', err); }
   } else {
     console.error('Eventi INGV (sismo-fvg) non raggiungibili:', evRes.reason || evRes.value?.status);
@@ -986,6 +1038,44 @@ async function loadSismoFvg() {
     console.error('Dati solari (sismo-fvg) non raggiungibili:', solRes.reason || solRes.value?.status);
   }
 
+  render();
+  renderHistogram();
+  renderStats();
+}
+
+// ---------- Catalogo EMSC ----------
+// Gli ultimi 30 giorni M>=EMSC_MIN_MAG (~7.000 eventi, ~4 MB). L'id 'emsc-<unid>'
+// è lo stesso degli eventi in diretta via WebSocket, così un evento notificato
+// in diretta passa al catalogo senza comparire due volte, e resta condivisibile
+// con ?id= (openSharedQuake lo trova nel mese).
+async function loadEmscCatalog() {
+  try {
+    const start = new Date(Date.now() - REPLAY_RANGE_MS).toISOString().slice(0, 19);
+    const r = await fetch(`${EMSC_FDSN}?format=json&minmag=${EMSC_MIN_MAG}&start=${start}&limit=20000`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    // FDSN risponde 204 senza corpo quando non ci sono eventi
+    const data = r.status === 204 ? { features: [] } : await r.json();
+    state.emscQuakes = (data.features || [])
+      .map(f => f.properties)
+      .filter(p => p && p.unid && p.mag != null && p.lat != null && p.lon != null)
+      .map(p => ({
+        id: 'emsc-' + p.unid,
+        lat: p.lat,
+        lng: p.lon,
+        depth: p.depth,
+        mag: p.mag,
+        place: p.flynn_region || 'Località sconosciuta',
+        time: Date.parse(p.time),
+        url: 'https://www.seismicportal.eu/eventdetails.html?unid=' + encodeURIComponent(p.unid),
+        tsunami: false,
+        source: 'emsc-cat',
+      }))
+      .filter(q => q.time);
+    mergeExtrasIntoState();
+  } catch (err) {
+    console.error('Catalogo EMSC non raggiungibile:', err);
+    return;
+  }
   render();
   renderHistogram();
   renderStats();
@@ -1009,7 +1099,8 @@ async function loadFeed() {
     // Ogni evento EMSC "in sospeso" confermato da USGS (stesso tempo/mag/
     // posizione, vedi isSameEmscUsgsEvent) esce dai sospesi: la voce ufficiale
     // USGS lo sostituisce senza un secondo toast. Chi resta in sospeso troppo
-    // a lungo (EMSC_PENDING_MAX_MS) viene scartato: USGS non l'ha mai ripreso.
+    // a lungo (EMSC_PENDING_MAX_MS) viene scartato: né USGS né il catalogo
+    // EMSC l'hanno mai ripreso.
     const confirmedIds = new Set();
     const now = Date.now();
     state.emscPending = state.emscPending.filter(eq => {
@@ -1033,7 +1124,7 @@ async function loadFeed() {
     quakes.forEach(q => state.seenIds.add(q.id));
 
     state.quakes = [...state.emscPending, ...quakes].sort((a, b) => b.time - a.time);
-    mergeIngvIntoState(); // riaggiunge gli eventi FVG/CF cache: loadFeed() li avrebbe appena sovrascritti
+    mergeExtrasIntoState(); // riaggiunge gli eventi INGV/EMSC in cache: loadFeed() li avrebbe appena sovrascritti
     state.firstLoad = false;
     setLive(true);
     render();
@@ -1056,7 +1147,7 @@ async function loadMonth() {
     const r = await fetch(USGS + FEEDS.month, { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     state.monthQuakes = parseFeed(await r.json());
-    mergeIngvIntoState(); // riaggiunge gli eventi FVG/CF cache: loadMonth() li avrebbe appena sovrascritti
+    mergeExtrasIntoState(); // riaggiunge gli eventi INGV/EMSC in cache: loadMonth() li avrebbe appena sovrascritti
     renderHistogram();
     renderStats();
   } catch (err) {
@@ -1212,14 +1303,17 @@ $('app-version').textContent = 'SismoGlobe ' + APP_VERSION;
   await loadFeed();
   const monthLoaded = loadMonth();
   const sismoFvgLoaded = loadSismoFvg();
+  const emscLoaded = loadEmscCatalog();
   $('loading').classList.add('done');
   setInterval(loadFeed, POLL_MS);
   setInterval(loadMonth, MONTH_POLL_MS);
   setInterval(loadSismoFvg, INGV_POLL_MS);
+  setInterval(loadEmscCatalog, EMSC_POLL_MS);
   connectEmsc();
   if (sharedId) {
     await monthLoaded;
     await sismoFvgLoaded; // il link condiviso potrebbe puntare a un evento INGV
+    await emscLoaded;     // ... o del catalogo EMSC
     openSharedQuake(sharedId);
   }
 })();

@@ -10,6 +10,7 @@ Codice sorgente: https://github.com/gmy77/sismoglobe
 
 - Mostra su un globo 3D ogni terremoto rilevato nel mondo, nel punto esatto dell'epicentro.
 - Aggiorna i dati ogni 60 secondi dai feed GeoJSON dell'USGS; lo storico a 30 giorni ogni 10 minuti.
+- Aggiunge ogni 10 minuti dal catalogo EMSC (centro sismologico euro-mediterraneo) le scosse M2.5+ che USGS non registra, senza duplicare quelle presenti su entrambe le fonti.
 - Dimensiona e colora ogni evento in base alla magnitudo (verde sotto 3, poi giallo, arancione, rosso, magenta oltre 7); la dimensione cresce con il quadrato della magnitudo.
 - Circonda di onde animate i terremoti delle ultime tre ore.
 - Conta i terremoti giorno per giorno negli ultimi 30 giorni in un istogramma cliccabile, che filtra il globo su una singola giornata.

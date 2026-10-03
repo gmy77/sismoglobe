@@ -6,6 +6,7 @@ Monitoraggio dei terremoti di tutto il pianeta in tempo reale, su un globo 3D in
 
 - **Globo 3D** (WebGL, [globe.gl](https://globe.gl)) con texture notturna, atmosfera e confini nazionali (world-atlas TopoJSON, disegnati come singola mesh di linee per non pesare sul rendering).
 - **Feed live USGS**: polling ogni 60 secondi del feed `all_day` / `all_week` / `all_month`.
+- **Catalogo EMSC**: ogni 10 minuti gli eventi M2.5+ degli ultimi 30 giorni dal catalogo FDSN di EMSC; quelli assenti su USGS (molti eventi minori fuori dagli USA) vengono aggiunti con badge 🇪🇺, i doppioni scartati.
 - **Avvisi in tempo reale**: ogni nuovo terremoto genera un toast con magnitudo, località, profondità e ora; opzionale segnale acustico (tono più grave per magnitudo più alte) e "volo" della camera sull'epicentro per M ≥ 4.5.
 - **Cerchi proporzionali alla magnitudo**: ogni sisma è un cerchio colorato la cui dimensione cresce con la magnitudo; gli eventi delle ultime 3 ore emettono anelli animati (onde sismiche) con raggio e velocità proporzionali alla magnitudo.
 - **Istogramma giornaliero (30 giorni)**: barre colorate in base alla magnitudo massima del giorno; click su una barra per vedere sul globo solo i sismi di quel giorno.
@@ -36,5 +37,6 @@ poi aprire <http://localhost:8642>.
 ## Fonti dati
 
 - Terremoti: [USGS Earthquake Hazards Program – GeoJSON feeds](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php)
+- Terremoti minori: [EMSC – FDSN event web service](https://www.seismicportal.eu/fdsn-wsevent.html)
 - Confini: [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth 110m)
 - Rendering: [globe.gl](https://globe.gl) (three.js)
