@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.8.4';
+const APP_VERSION = 'v1.8.5';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -651,9 +651,9 @@ function renderList(vis) {
     const srcTag = isEmsc
       ? ' <span class="q-pending" title="Notifica EMSC in diretta, in attesa del feed USGS o del catalogo EMSC">⚡</span>'
       : isIngv
-        ? ' <span class="q-pending" title="Fonte: INGV via sismo-fvg.gimmycloud.net — sismicità regionale FVG/Campi Flegrei, non presente sul feed USGS">🇮🇹</span>'
+        ? ' <span class="q-src" title="Fonte: INGV via sismo-fvg.gimmycloud.net — sismicità regionale FVG/Campi Flegrei, non presente sul feed USGS">INGV</span>'
         : q.source === 'emsc-cat'
-          ? ' <span class="q-pending" title="Fonte: catalogo EMSC (European-Mediterranean Seismological Centre) — evento non presente sul feed USGS">🇪🇺</span>'
+          ? ' <span class="q-src" title="Fonte: catalogo EMSC (European-Mediterranean Seismological Centre) — evento non presente sul feed USGS">EMSC</span>'
           : '';
     li.innerHTML = `
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
@@ -670,7 +670,10 @@ function renderList(vis) {
 
 function renderStats() {
   const now = Date.now();
-  const src = state.monthQuakes.length ? state.monthQuakes : state.quakes;
+  // state.quakes copre sempre almeno 24h (finestra 24h/7g/30g) ed è aggiornato
+  // ogni 60s: il mese (ogni 10 min) restava indietro di qualche evento rispetto
+  // a LIVE e alla lista. Esclusi gli EMSC in sospeso, non ancora confermati.
+  const src = state.quakes.filter(q => q.source !== 'emsc');
   const hour = src.filter(q => now - q.time < 3600_000);
   const last24 = src.filter(q => now - q.time < 86400_000);
   const maxQ = (state.selectedDay ? visibleQuakes() : last24)
@@ -926,7 +929,7 @@ function disconnectEmsc() {
 // Stesso spirito della fusione EMSC/USGS sopra: le fonti non condividono un id
 // comune, quindi un evento presente su più fonti va scartato da un lato per non
 // mostrarlo due volte sul globo. Priorità: USGS, poi INGV (un sisma italiano
-// presente anche su EMSC resta con badge 🇮🇹 e dati INGV), poi EMSC.
+// presente anche su EMSC resta con l'etichetta e i dati INGV), poi EMSC.
 const SAME_EVENT_MS = 6 * 60_000;
 function isSameIngvEvent(o, ev) {
   return Math.abs(o.time - ev.time) < SAME_EVENT_MS &&

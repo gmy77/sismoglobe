@@ -604,3 +604,10 @@ body.info-open #footer { display: none; }   /* la guida ha già i suoi link in f
      stretti calc(100vw - 360px) diventa negativa e la larghezza non è valida. */
   #info { left: 12px; width: auto; padding: 18px 20px 22px; }
 }
+/* Etichetta della fonte (INGV/EMSC) in lista e nella guida: testo, non emoji
+   bandiera, che su Windows non esistono e diventano le lettere "IT"/"EU". */
+.q-src {
+  font-size: 9px; font-weight: 600; letter-spacing: .03em;
+  padding: 0 4px; margin-left: 3px; border-radius: 3px; vertical-align: 1px;
+  border: 1px solid var(--panel-border); opacity: .85; white-space: nowrap;
+}

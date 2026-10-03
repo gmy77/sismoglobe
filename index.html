@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.8.0">
+<link rel="stylesheet" href="style.css?v=1.8.5">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -117,13 +117,13 @@
     <div id="topbar-top">
       <div id="brand">
         <h1>SismoGlobe</h1>
-        <span class="sub">Monitoraggio sismico globale in tempo reale — dati USGS</span>
+        <span class="sub">Monitoraggio sismico globale in tempo reale — dati USGS, EMSC e INGV</span>
         <div id="source-badges">
           <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener" class="src-badge src-badge-logo" title="U.S. Geological Survey">
             <img src="usgs-logo.svg" alt="USGS" width="38" height="14">
           </a>
           <a href="https://www.emsc-csem.org/" target="_blank" rel="noopener" class="src-badge">EMSC</a>
-          <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener" class="src-badge" title="Micro-sismicità FVG/Campi Flegrei da INGV, via il progetto ECHO">🇮🇹 INGV</a>
+          <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener" class="src-badge" title="Micro-sismicità FVG/Campi Flegrei da INGV, via il progetto ECHO">INGV</a>
         </div>
       </div>
 
@@ -176,12 +176,12 @@
       <div id="source-body" class="collapsible">
         <p>Terremoti rilevati dalle reti sismiche mondiali, raccolti dallo <strong>USGS</strong> (United States
         Geological Survey) e dallo <strong>EMSC</strong> (European-Mediterranean Seismological Centre), che
-        aggiunge molti eventi minori (M2.5+) assenti su USGS — badge 🇪🇺; ogni terremoto presente su più fonti
+        aggiunge molti eventi minori (M2.5+) assenti su USGS — etichetta <span class="q-src">EMSC</span>; ogni terremoto presente su più fonti
         compare una volta sola. Finestra USGS aggiornata ogni <strong>60 secondi</strong>, storico dei 30 giorni
         e catalogo EMSC ogni 10 minuti.
         La micro-sismicità del <strong>Friuli Venezia Giulia</strong> e dei <strong>Campi Flegrei</strong> (spesso
         sotto la soglia rilevata da USGS) arriva invece dall'<strong>INGV</strong>, tramite il progetto
-        <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener">sismo-fvg</a> — badge 🇮🇹.</p>
+        <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener">sismo-fvg</a> — etichetta <span class="q-src">INGV</span>.</p>
       </div>
     </section>
 
@@ -245,7 +245,7 @@
     Per questo SismoGlobe unisce anche il catalogo del <strong>centro sismologico euro-mediterraneo
     (EMSC)</strong>, che raccoglie molte scosse minori dalle reti nazionali (Cile, Indonesia, Grecia…): ogni
     10 minuti scarica gli eventi di magnitudo 2.5 o superiore degli ultimi 30 giorni e aggiunge quelli che USGS
-    non ha, segnati con 🇪🇺. Se lo stesso terremoto è su entrambe le fonti (stesso istante, posizione e
+    non ha, segnati con l'etichetta <span class="q-src">EMSC</span>. Se lo stesso terremoto è su entrambe le fonti (stesso istante, posizione e
     magnitudo simili) viene mostrato una volta sola, con i dati USGS.</p>
 
     <h2>Come si legge la mappa</h2>
@@ -341,6 +341,6 @@
 
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-<script src="main.js?v=1.8.4"></script>
+<script src="main.js?v=1.8.5"></script>
 </body>
 </html>
