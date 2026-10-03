@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.8.1';
+const APP_VERSION = 'v1.8.2';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -656,13 +656,12 @@ function renderList(vis) {
 function renderStats() {
   const now = Date.now();
   const src = state.monthQuakes.length ? state.monthQuakes : state.quakes;
-  const today = src.filter(q => utcDay(q.time) === utcDay(now));
   const hour = src.filter(q => now - q.time < 3600_000);
   const last24 = src.filter(q => now - q.time < 86400_000);
   const maxQ = (state.selectedDay ? visibleQuakes() : last24)
     .reduce((a, b) => (!a || b.mag > a.mag ? b : a), null);
 
-  $('st-today').textContent = today.length;
+  $('st-24h').textContent = last24.length; // stessa finestra del globo (feed 24h), non il giorno UTC
   $('st-hour').textContent = hour.length;
   $('st-max').textContent = maxQ ? 'M ' + maxQ.mag.toFixed(1) : '–';
   $('st-energy').textContent = fmtEnergy(last24.reduce((s, q) => s + energyJoules(q.mag), 0));

@@ -9,7 +9,7 @@ Monitoraggio dei terremoti di tutto il pianeta in tempo reale, su un globo 3D in
 - **Avvisi in tempo reale**: ogni nuovo terremoto genera un toast con magnitudo, località, profondità e ora; opzionale segnale acustico (tono più grave per magnitudo più alte) e "volo" della camera sull'epicentro per M ≥ 4.5.
 - **Cerchi proporzionali alla magnitudo**: ogni sisma è un cerchio colorato la cui dimensione cresce con la magnitudo; gli eventi delle ultime 3 ore emettono anelli animati (onde sismiche) con raggio e velocità proporzionali alla magnitudo.
 - **Istogramma giornaliero (30 giorni)**: barre colorate in base alla magnitudo massima del giorno; click su una barra per vedere sul globo solo i sismi di quel giorno.
-- **Statistiche**: eventi oggi, eventi nell'ultima ora, magnitudo massima 24h, energia sismica rilasciata nelle ultime 24h (equivalente TNT).
+- **Statistiche**: eventi nelle ultime 24h, eventi nell'ultima ora, magnitudo massima 24h, energia sismica rilasciata nelle ultime 24h (equivalente TNT).
 - **Filtri**: finestra temporale (24h / 7g / 30g) e magnitudo minima.
 - **Lista eventi** cliccabile (vola sull'epicentro), tooltip dettagliato al passaggio del mouse, indicazione allerta tsunami.
 
