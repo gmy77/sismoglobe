@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SismoGlobe — Terremoti nel mondo in tempo reale su globo 3D</title>
+<meta name="description" content="Mappa dei terremoti di tutto il pianeta in tempo reale su un globo 3D interattivo: dati USGS aggiornati ogni minuto, cerchi proporzionali alla magnitudo, statistiche giornaliere ed energia sismica rilasciata.">
+<link rel="canonical" href="https://sismo.gimmycloud.net/">
+<meta name="theme-color" content="#05070f">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sismo.gimmycloud.net/">
+<meta property="og:site_name" content="SismoGlobe">
+<meta property="og:locale" content="it_IT">
+<meta property="og:title" content="SismoGlobe — Terremoti nel mondo in tempo reale su globo 3D">
+<meta property="og:description" content="Mappa dei terremoti di tutto il pianeta in tempo reale su un globo 3D interattivo: dati USGS aggiornati ogni minuto, cerchi proporzionali alla magnitudo, statistiche giornaliere ed energia sismica rilasciata.">
+<meta property="og:image" content="https://sismo.gimmycloud.net/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Globo terrestre 3D con i terremoti in tempo reale segnati da cerchi colorati">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SismoGlobe — Terremoti nel mondo in tempo reale su globo 3D">
+<meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
+<meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
+
+<link rel="stylesheet" href="style.css?v=1.9.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "@id": "https://sismo.gimmycloud.net/#app",
+      "name": "SismoGlobe",
+      "url": "https://sismo.gimmycloud.net/",
+      "applicationCategory": "https://schema.org/BrowserApplication",
+      "operatingSystem": "Qualsiasi browser con WebGL",
+      "inLanguage": "it",
+      "description": "Applicazione web che visualizza i terremoti di tutto il pianeta in tempo reale su un globo terrestre 3D interattivo, con cerchi proporzionali alla magnitudo, istogramma degli eventi giornalieri e calcolo dell'energia sismica rilasciata.",
+      "featureList": [
+        "Globo 3D interattivo con confini nazionali e placche tettoniche",
+        "Aggiornamento dei terremoti ogni 60 secondi dai feed USGS",
+        "Avviso immediato a ogni nuovo sisma con magnitudo, località e profondità",
+        "Cerchi e onde animate proporzionali alla magnitudo, sollevati dal globo in base alla profondità dell'ipocentro",
+        "Istogramma dei terremoti al giorno negli ultimi 30 giorni, filtrabile anche per paese con un clic sul globo",
+        "Energia sismica rilasciata nelle ultime 24 ore in equivalente TNT",
+        "Link diretto e condivisibile a ogni singolo evento sismico",
+        "Replay animato degli ultimi 30 giorni di attività sismica",
+        "Notifiche quasi istantanee via WebSocket dal centro sismologico euro-mediterraneo EMSC"
+      ],
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "license": "https://github.com/gmy77/sismoglobe",
+      "author": { "@type": "Person", "name": "Gimmy", "url": "https://gimmycloud.net/" }
+    },
+    {
+      "@type": "Dataset",
+      "@id": "https://sismo.gimmycloud.net/#dataset",
+      "name": "Terremoti mondiali in tempo reale (USGS)",
+      "description": "Eventi sismici rilevati in tutto il mondo negli ultimi 30 giorni: magnitudo, coordinate, profondità e orario, aggiornati ogni minuto.",
+      "inLanguage": "it",
+      "spatialCoverage": "Mondo",
+      "temporalCoverage": "P30D",
+      "isBasedOn": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
+      "creator": { "@type": "Organization", "name": "United States Geological Survey", "url": "https://www.usgs.gov/" },
+      "license": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+      "isAccessibleForFree": true
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://sismo.gimmycloud.net/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Da dove arrivano i dati sui terremoti?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Dai feed pubblici GeoJSON dello United States Geological Survey (USGS), che raccoglie le rilevazioni delle reti sismiche di tutto il mondo. SismoGlobe li interroga ogni 60 secondi." }
+        },
+        {
+          "@type": "Question",
+          "name": "Ogni quanto si aggiornano i terremoti?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Ogni 60 secondi per la finestra selezionata, e ogni 10 minuti per lo storico dei 30 giorni. Un terremoto compare tipicamente entro pochi minuti dalla scossa, il tempo che le reti sismiche lo elaborino." }
+        },
+        {
+          "@type": "Question",
+          "name": "Cosa significa la magnitudo di un terremoto?",
+          "acceptedAnswer": { "@type": "Answer", "text": "È una misura logaritmica dell'energia rilasciata: ogni punto in più corrisponde a circa 32 volte l'energia. Un terremoto di magnitudo 6 libera quindi circa 32 volte l'energia di uno di magnitudo 5 e circa mille volte quella di uno di magnitudo 4." }
+        },
+        {
+          "@type": "Question",
+          "name": "Come si legge il colore e la dimensione dei cerchi?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Il colore va dal verde (sotto magnitudo 3) al giallo, arancione, rosso e magenta (magnitudo 7 e oltre). La dimensione del cerchio cresce con il quadrato della magnitudo, così gli eventi forti restano riconoscibili anche fra migliaia di scosse minori." }
+        },
+        {
+          "@type": "Question",
+          "name": "SismoGlobe è un sistema di allerta terremoti?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. È uno strumento divulgativo che mostra terremoti già avvenuti e rilevati. Non prevede i terremoti e non sostituisce i canali ufficiali di protezione civile: in Italia i riferimenti sono l'INGV e il Dipartimento della Protezione Civile." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<meta name="robots" content="noindex,nofollow"></head>
+<body><div style="position:fixed;right:8px;bottom:8px;z-index:9999;background:#152238;color:white;padding:6px;font:12px sans-serif">Anteprima v1.9 · da verificare</div>
+
+<header id="topbar">
+  <button id="btn-hamburger" title="Apri pannello">
+    <span></span>
+    <span></span>
+    <span></span>
+  </button>
+  <span class="logo" id="brand-logo">🌍</span>
+
+  <div id="topbar-main">
+    <div id="topbar-top">
+      <div id="brand">
+        <h1>SismoGlobe</h1>
+        <span class="sub">Monitoraggio sismico globale in tempo reale — dati USGS, EMSC e INGV</span>
+        <div id="source-badges">
+          <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener" class="src-badge src-badge-logo" title="U.S. Geological Survey">
+            <img src="../usgs-logo.svg" alt="USGS" width="38" height="14">
+          </a>
+          <a href="https://www.emsc-csem.org/" target="_blank" rel="noopener" class="src-badge">EMSC</a>
+          <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener" class="src-badge" title="Micro-sismicità FVG/Campi Flegrei da INGV, via il progetto ECHO">INGV</a>
+        </div>
+      </div>
+
+      <div id="live">
+        <span class="dot" id="live-dot"></span>
+        <span id="live-text">connessione…</span>
+      </div>
+    </div>
+
+    <div id="topbar-bottom">
+      <div id="stats">
+        <div class="stat"><span class="stat-val" id="st-24h">–</span><span class="stat-lab">eventi 24h</span></div>
+        <div class="stat"><span class="stat-val" id="st-hour">–</span><span class="stat-lab">ultima ora</span></div>
+        <div class="stat"><span class="stat-val" id="st-max">–</span><span class="stat-lab">mag. max</span></div>
+        <div class="stat"><span class="stat-val" id="st-energy">–</span><span class="stat-lab">energia 24h</span></div>
+        <div class="stat" id="st-kp-box" title="Indice geomagnetico Kp (NOAA SWPC), massimo dell'ultimo giorno disponibile — via sismo-fvg">
+          <span class="stat-val" id="st-kp">–</span><span class="stat-lab">Kp solare</span>
+        </div>
+      </div>
+
+      <div id="controls">
+        <label class="win-label">Finestra
+          <select id="sel-window">
+            <option value="day" selected>24 ore</option>
+            <option value="week">7 giorni</option>
+            <option value="month">30 giorni</option>
+          </select>
+        </label>
+        <label>Mag. min <span id="mag-val">0</span>
+          <input type="range" id="sel-mag" min="0" max="6" step="0.5" value="0">
+        </label>
+        <label class="chk"><input type="checkbox" id="chk-sound"> 🔔 audio</label>
+        <label class="chk"><input type="checkbox" id="chk-rotate" checked> 🔄 rotazione</label>
+        <label class="chk"><input type="checkbox" id="chk-fly" checked> 🎯 vola sui nuovi</label>
+        <label class="chk"><input type="checkbox" id="chk-plates" checked> 🌋 placche</label>
+        <label class="chk"><input type="checkbox" id="chk-emsc" checked> ⚡ EMSC live</label>
+        <button id="btn-info" type="button" aria-expanded="false" aria-controls="info">ℹ️ guida</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <aside id="panel">
+    <section id="explore-box">
+      <div class="view-switch" role="group" aria-label="Visualizzazione">
+        <button id="view-3d" type="button" aria-pressed="true">Globo 3D</button>
+        <button id="view-2d" type="button" aria-pressed="false">Mappa 2D</button>
+      </div>
+      <label class="quality-label">Animazioni <select id="sel-quality"><option value="auto">Automatiche</option><option value="light">Ridotte</option></select></label>
+      <div class="favorites-row"><label for="sel-place">Luoghi preferiti</label><button id="save-place" type="button" title="Salva la vista corrente">☆ Salva vista</button></div>
+      <div class="favorites-row"><select id="sel-place" aria-label="Luoghi preferiti"><option value="">Scegli un luogo…</option><option value="world">Mondo</option><option value="italy">Italia</option><option value="friuli">Friuli Venezia Giulia</option></select><button id="remove-place" type="button" aria-label="Rimuovi preferito" disabled>✕</button></div>
+      <form id="favorite-form" hidden><label for="favorite-name">Nome della vista</label><input id="favorite-name" maxlength="40" required placeholder="Es. Pacifico"><button type="submit">Salva</button><button id="cancel-favorite" type="button">Annulla</button></form>
+      <details id="sources-status"><summary>Stato delle fonti <span id="sources-summary">in attesa</span></summary><ul id="source-health"></ul><p>Orario dell'ultima ricezione riuscita. INGV e Kp passano dal progetto ECHO: la ricezione non indica quando il catalogo a monte è stato aggiornato.</p></details>
+    </section>
+    <section id="source-box">
+      <h2 id="source-toggle" role="button" tabindex="0" aria-expanded="true" aria-controls="source-body">
+        Sulla fonte dati
+        <span class="collapse-arrow">▾</span>
+      </h2>
+      <div id="source-body" class="collapsible">
+        <p>Terremoti rilevati dalle reti sismiche mondiali, raccolti dallo <strong>USGS</strong> (United States
+        Geological Survey) e dallo <strong>EMSC</strong> (European-Mediterranean Seismological Centre), che
+        aggiunge molti eventi minori (M2.5+) assenti su USGS — etichetta <span class="q-src">EMSC</span>; ogni terremoto presente su più fonti
+        compare una volta sola. Finestra USGS aggiornata ogni <strong>60 secondi</strong>, storico dei 30 giorni
+        e catalogo EMSC ogni 10 minuti.
+        La micro-sismicità del <strong>Friuli Venezia Giulia</strong> e dei <strong>Campi Flegrei</strong> (spesso
+        sotto la soglia rilevata da USGS) arriva invece dall'<strong>INGV</strong>, tramite il progetto
+        <a href="https://sismo-fvg.gimmy077.workers.dev/" target="_blank" rel="noopener">sismo-fvg</a> — etichetta <span class="q-src">INGV</span>.</p>
+      </div>
+    </section>
+
+    <section id="histo-box">
+      <h2>Terremoti al giorno <small>(30 giorni, UTC)</small>
+        <button id="btn-replay" type="button" title="Rivedi in sequenza gli ultimi 30 giorni">▶️ replay</button>
+      </h2>
+      <div id="day-banner" class="filter-banner hidden">
+        <span id="day-banner-text"></span>
+        <button id="day-reset" class="banner-reset">✕ giorno</button>
+      </div>
+      <div id="country-banner" class="filter-banner hidden">
+        <span id="country-banner-text"></span>
+        <button id="country-reset" class="banner-reset">✕ paese</button>
+      </div>
+      <div id="replay-panel" class="hidden">
+        <div class="replay-row">
+          <button id="replay-playpause" type="button" aria-label="Play/pausa">⏸️</button>
+          <input id="replay-slider" type="range" min="0" max="1000" value="0">
+          <button id="replay-exit" type="button" title="Esci dal replay">✕</button>
+        </div>
+        <div id="replay-date" class="replay-date"></div>
+      </div>
+      <div id="histogram"></div>
+      <div class="legend">
+        <span><i style="background:#68e07f"></i>&lt;3</span>
+        <span><i style="background:#ffe14d"></i>3–4</span>
+        <span><i style="background:#ffb300"></i>4–5</span>
+        <span><i style="background:#ff7a00"></i>5–6</span>
+        <span><i style="background:#ff3b30"></i>6–7</span>
+        <span><i style="background:#ff2d78"></i>7+</span>
+      </div>
+    </section>
+
+    <section id="list-box">
+      <h2>Ultimi eventi <small id="list-count"></small></h2>
+      <ul id="quake-list"></ul>
+    </section>
+  </aside>
+
+  <div id="panel-backdrop"></div>
+
+  <div id="globe"></div>
+  <div id="map-view" hidden><canvas id="map-canvas" tabindex="0" aria-label="Mappa terremoti: trascina per spostare, usa più e meno per zoomare. I dettagli accessibili sono nella lista eventi."></canvas><div id="map-tools"><button id="map-in" aria-label="Ingrandisci mappa">+</button><button id="map-out" aria-label="Riduci mappa">−</button><button id="map-world">Mondo</button></div><span class="map-hint">Trascina · rotella / + − per zoom · clic su evento o paese</span></div>
+
+  <article id="info" hidden>
+    <button id="info-close" type="button" aria-label="Chiudi la guida">✕</button>
+
+    <h2>Che cos'è SismoGlobe</h2>
+    <p><strong>SismoGlobe</strong> è una mappa dei terremoti di tutto il pianeta in tempo reale, disegnata su un
+    globo terrestre in 3D che puoi ruotare e ingrandire. Ogni scossa rilevata nel mondo compare come un cerchio
+    colorato nel punto esatto dell'epicentro, con dimensione e colore che dipendono dalla magnitudo. È uno
+    strumento divulgativo gratuito e open source: nessuna registrazione, nessun tracciamento.</p>
+
+    <h2>Da dove arrivano i dati</h2>
+    <p>I terremoti provengono dai feed pubblici dello <strong>United States Geological Survey (USGS)</strong>,
+    l'ente geologico statunitense che raccoglie e distribuisce le rilevazioni delle reti sismiche di tutto il
+    mondo. SismoGlobe interroga quei feed <strong>ogni 60 secondi</strong> per la finestra temporale che hai
+    scelto, e ogni 10 minuti per lo storico dei 30 giorni. Una scossa compare tipicamente entro pochi minuti:
+    il ritardo è il tempo che le reti sismiche impiegano a localizzarla e stimarne la magnitudo.</p>
+    <p>Fuori dagli Stati Uniti USGS registra in modo completo solo le scosse più forti (sopra magnitudo 4–4.5).
+    Per questo SismoGlobe unisce anche il catalogo del <strong>centro sismologico euro-mediterraneo
+    (EMSC)</strong>, che raccoglie molte scosse minori dalle reti nazionali (Cile, Indonesia, Grecia…): ogni
+    10 minuti scarica gli eventi di magnitudo 2.5 o superiore degli ultimi 30 giorni e aggiunge quelli che USGS
+    non ha, segnati con l'etichetta <span class="q-src">EMSC</span>. Se lo stesso terremoto è su entrambe le fonti (stesso istante, posizione e
+    magnitudo simili) viene mostrato una volta sola, con i dati USGS.</p>
+
+    <h2>Come si legge la mappa</h2>
+    <p>Il <strong>colore</strong> indica la severità e segue la legenda in basso a sinistra: verde sotto
+    magnitudo 3, poi giallo, arancione, rosso e magenta per magnitudo 7 e oltre. La <strong>dimensione</strong>
+    del cerchio cresce con il quadrato della magnitudo, così gli eventi forti restano riconoscibili anche in
+    mezzo a migliaia di scosse minori — che sono la stragrande maggioranza. Le <strong>onde animate</strong>
+    circondano i terremoti delle ultime tre ore, e si propagano tanto più velocemente e ampiamente quanto più
+    l'evento è stato forte. Passando il mouse su un cerchio compaiono magnitudo, località, profondità e orario;
+    facendo clic la visuale ci vola sopra.</p>
+
+    <h2>Che cosa significa la magnitudo</h2>
+    <p>La magnitudo è una misura <strong>logaritmica</strong>, e questo la rende poco intuitiva: ogni punto in
+    più corrisponde a circa <strong>32 volte l'energia rilasciata</strong>. Un terremoto di magnitudo 6 non è
+    "un po' più forte" di uno di magnitudo 5: libera circa trenta volte più energia, e circa mille volte quella
+    di un magnitudo 4. È il motivo per cui una giornata con centinaia di scosse leggere può risultare
+    energeticamente insignificante rispetto a un singolo evento importante.</p>
+
+    <h2>L'energia sismica in equivalente TNT</h2>
+    <p>Il riquadro <em>energia 24h</em> in alto somma l'energia di tutti i terremoti delle ultime ventiquattro
+    ore e la converte in <strong>tonnellate equivalenti di TNT</strong>, per dare un'idea più concreta di un
+    numero altrimenti astratto. Il calcolo usa la relazione standard fra magnitudo ed energia in joule
+    (log<sub>10</sub>E = 1,5·M + 4,8), poi divide per l'energia di una tonnellata di tritolo.</p>
+
+    <h2>La profondità conta quanto la magnitudo</h2>
+    <p>Nei dettagli di ogni evento trovi la profondità dell'ipocentro in chilometri. È un'informazione decisiva:
+    a parità di magnitudo, un terremoto <strong>superficiale</strong> (pochi chilometri) è molto più
+    distruttivo in superficie di uno profondo qualche centinaio di chilometri, la cui energia si disperde prima
+    di arrivare in cima. Molti eventi apparentemente forti passano inosservati proprio perché profondi. Sul
+    globo la profondità è visibile anche a colpo d'occhio: più un cerchio è <strong>sollevato</strong> dalla
+    superficie, più l'evento è superficiale; i terremoti profondi restano quasi appiattiti sul globo.</p>
+
+    <h2>Perché i terremoti si concentrano in certe zone</h2>
+    <p>Le linee arancioni sul globo (disattivabili con "🌋 placche") sono i confini delle <strong>placche
+    tettoniche</strong>, le grandi porzioni rigide in cui è divisa la crosta terrestre. La stragrande maggioranza
+    dei terremoti avviene proprio lungo questi confini, dove le placche scorrono, si scontrano o si allontanano
+    tra loro: non è un caso che la "cintura di fuoco" del Pacifico, la dorsale medio-atlantica o la fascia
+    himalayana concentrino la maggior parte degli eventi visibili sul globo.</p>
+
+    <h2>Statistiche e storico</h2>
+    <p>L'istogramma a sinistra conta i terremoti giorno per giorno negli ultimi 30 giorni (in orario UTC), con
+    il colore della barra che riflette la scossa più forte di quella giornata. Facendo clic su una barra il
+    globo mostra soltanto i sismi di quel giorno. In alto trovi il totale delle ultime 24 ore, quelli dell'ultima ora e la
+    magnitudo massima delle ultime 24 ore. Puoi anche fare clic direttamente su un <strong>paese</strong> sul
+    globo per filtrare lista e istogramma solo sui suoi eventi: i due filtri, giorno e paese, si possono
+    combinare, e un banner in alto al pannello mostra sempre cosa stai guardando con un pulsante per rimuoverlo.</p>
+
+    <h2>Notifiche quasi istantanee (EMSC)</h2>
+    <p>Il feed USGS si aggiorna ogni 60 secondi e il catalogo EMSC ogni 10 minuti. Con "⚡ EMSC live" attivo,
+    SismoGlobe apre anche una connessione diretta all'<strong>EMSC</strong> via WebSocket: i nuovi eventi
+    arrivano come notifica in pochi secondi e compaiono subito sul globo e nella lista, segnati con ⚡. Restano
+    così finché lo stesso terremoto non arriva dal feed USGS o dal catalogo EMSC, che ne prende il posto senza
+    contarlo due volte. Fino ad allora non entrano nelle statistiche in alto: la lista indica quanti sono
+    ("di cui N ⚡ EMSC in attesa").</p>
+
+    <h2>Rivedere il mese in sequenza</h2>
+    <p>Il pulsante <strong>▶️ replay</strong> accanto all'istogramma comprime gli ultimi 30 giorni in una
+    sequenza animata di circa 48 secondi: il globo mostra solo i terremoti delle 24 ore precedenti all'istante
+    che si sta "riproducendo", così sciami sismici e sequenze di repliche diventano visibili a colpo d'occhio.
+    Si può mettere in pausa, trascinare lo slider per saltare a un momento preciso, o uscire in qualsiasi
+    momento tornando alla vista dal vivo.</p>
+
+    <h2>Vista 2D, preferiti e fluidità</h2>
+    <p>Passa da Globo 3D a Mappa 2D nel pannello. La mappa mantiene gli stessi eventi, filtri e replay;
+    si sposta trascinando e si ingrandisce con i pulsanti + e −, la rotella o la tastiera. I luoghi preferiti
+    cambiano l'inquadratura, non filtrano i dati. Salva una vista con un nome: resta in questo browser.
+    In modalità 2D il rendering del globo è sospeso. Le animazioni automatiche riducono gli anelli nelle
+    viste affollate; scegli Ridotte per disattivarli. Quando la scheda è nascosta, animazioni e replay sono sospesi.</p>
+    <h2>Condividere un evento</h2>
+    <p>Ogni terremoto ha un link diretto: passando il mouse su un evento nella lista, o aprendone il dettaglio
+    dopo un clic, compare un pulsante <strong>🔗 copia link</strong> che copia negli appunti un indirizzo del
+    tipo <code>sismo.gimmycloud.net/?id=...</code>. Aprendolo, SismoGlobe vola direttamente su quell'epicentro.
+    Funziona solo per eventi degli ultimi 30 giorni, il limite dei dati disponibili.</p>
+
+    <h2>Avvertenza importante</h2>
+    <p>SismoGlobe mostra terremoti <strong>già avvenuti</strong> e rilevati dalle reti sismiche.
+    <strong>Non è un sistema di allerta e non prevede i terremoti</strong>, cosa che allo stato attuale delle
+    conoscenze scientifiche nessuno è in grado di fare. Non sostituisce i canali ufficiali: in Italia i
+    riferimenti sono l'<a href="https://ingv.it" target="_blank" rel="noopener">INGV</a> e il Dipartimento della
+    Protezione Civile. I dati possono essere rivisti dall'USGS nelle ore successive a un evento, quindi la
+    magnitudo di una scossa recente può cambiare leggermente.</p>
+
+    <p class="info-foot">Codice sorgente su <a href="https://github.com/gmy77/sismoglobe" target="_blank" rel="noopener">GitHub</a>
+    · altre app su <a href="https://gimmycloud.net" target="_blank" rel="noopener">gimmycloud.net</a></p>
+  </article>
+</main>
+
+<div id="toasts"></div>
+
+<div id="footer">
+  <span id="app-version"></span> · <a href="https://github.com/gmy77/sismoglobe" target="_blank" rel="noopener">GitHub</a> · dati USGS, EMSC, INGV · creato con Claude Code — grazie <a href="https://www.anthropic.com" target="_blank" rel="noopener">Anthropic</a> 🤍
+  <br>grazie a Pignolo Gimmy, che tiene tutti in riga 🫡
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Caricamento del pianeta…</p>
+</div>
+
+<script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="explorer.js?v=1.9.0"></script>
+<script src="main.js?v=1.9.0"></script>
+</body>
+</html>
