@@ -615,3 +615,40 @@ body.info-open #footer { display: none; }   /* la guida ha già i suoi link in f
   padding: 0 4px; margin-left: 3px; border-radius: 3px; vertical-align: 1px;
   border: 1px solid var(--panel-border); opacity: .85; white-space: nowrap;
 }
+
+/* Exploration controls stay in the drawer on small screens. */
+[hidden] { display: none !important; }
+#controls { flex-wrap: wrap; }
+#explore-box { flex-shrink: 0; }
+#explore-box button, #explore-box select, #explore-box input, #map-tools button {
+  background: #101c33; color: var(--text); border: 1px solid #34486b;
+  border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px;
+}
+#explore-box button, #map-tools button { cursor: pointer; }
+#explore-box button:disabled { opacity: .4; cursor: default; }
+#explore-box button:focus-visible, #explore-box select:focus-visible, #map-canvas:focus-visible { outline: 2px solid #8aabff; outline-offset: 2px; }
+.view-switch { display: flex; gap: 6px; margin-bottom: 8px; }
+.view-switch button { flex: 1; }
+#explore-box .view-switch button[aria-pressed="true"] { background: #294777; border-color: #8aabff; }
+.quality-label, .favorites-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; margin-top: 7px; }
+#sel-place { flex: 1; min-width: 0; width: 100%; }
+#favorite-form { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+#favorite-form label { width: 100%; font-size: 12px; }
+#favorite-name { width: 100%; }
+#sources-status { margin-top: 10px; font-size: 11px; }
+#sources-status summary { cursor: pointer; padding: 4px 0; }
+#sources-summary { color: var(--text-dim); float: right; }
+#source-health { list-style: none; }
+#source-health li { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid #243149; padding: 5px 0; }
+#source-health span, #sources-status p { color: var(--text-dim); font-size: 10px; }
+#source-health [data-status="error"] span { color: #ffb66d; }
+#source-health [data-status="ok"] b { color: #8ce3a5; }
+#map-view { position: absolute; inset: 0; overflow: hidden; }
+#map-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#map-canvas:active { cursor: grabbing; }
+#map-tools { position: absolute; right: 16px; top: 16px; display: flex; gap: 6px; }
+#map-tools button { min-width: 36px; min-height: 36px; }
+.map-hint { position: absolute; bottom: 55px; left: 12px; color: #aabddd; font-size: 11px; pointer-events: none; }
+#panel { overflow-y: auto; scrollbar-width: thin; }
+#list-box { min-height: 150px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

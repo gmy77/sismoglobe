@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.8.6">
+<link rel="stylesheet" href="style.css?v=1.9.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -168,6 +168,17 @@
 
 <main>
   <aside id="panel">
+    <section id="explore-box">
+      <div class="view-switch" role="group" aria-label="Visualizzazione">
+        <button id="view-3d" type="button" aria-pressed="true">Globo 3D</button>
+        <button id="view-2d" type="button" aria-pressed="false">Mappa 2D</button>
+      </div>
+      <label class="quality-label">Animazioni <select id="sel-quality"><option value="auto">Automatiche</option><option value="light">Ridotte</option></select></label>
+      <div class="favorites-row"><label for="sel-place">Luoghi preferiti</label><button id="save-place" type="button" title="Salva la vista corrente">☆ Salva vista</button></div>
+      <div class="favorites-row"><select id="sel-place" aria-label="Luoghi preferiti"><option value="">Scegli un luogo…</option><option value="world">Mondo</option><option value="italy">Italia</option><option value="friuli">Friuli Venezia Giulia</option></select><button id="remove-place" type="button" aria-label="Rimuovi preferito" disabled>✕</button></div>
+      <form id="favorite-form" hidden><label for="favorite-name">Nome della vista</label><input id="favorite-name" maxlength="40" required placeholder="Es. Pacifico"><button type="submit">Salva</button><button id="cancel-favorite" type="button">Annulla</button></form>
+      <details id="sources-status"><summary>Stato delle fonti <span id="sources-summary">in attesa</span></summary><ul id="source-health"></ul><p>Orario dell'ultima ricezione riuscita. INGV e Kp passano dal progetto ECHO: la ricezione non indica quando il catalogo a monte è stato aggiornato.</p></details>
+    </section>
     <section id="source-box">
       <h2 id="source-toggle" role="button" tabindex="0" aria-expanded="true" aria-controls="source-body">
         Sulla fonte dati
@@ -225,6 +236,7 @@
   <div id="panel-backdrop"></div>
 
   <div id="globe"></div>
+  <div id="map-view" hidden><canvas id="map-canvas" tabindex="0" aria-label="Mappa terremoti: trascina per spostare, usa più e meno per zoomare. I dettagli accessibili sono nella lista eventi."></canvas><div id="map-tools"><button id="map-in" aria-label="Ingrandisci mappa">+</button><button id="map-out" aria-label="Riduci mappa">−</button><button id="map-world">Mondo</button></div><span class="map-hint">Trascina · rotella / + − per zoom · clic su evento o paese</span></div>
 
   <article id="info" hidden>
     <button id="info-close" type="button" aria-label="Chiudi la guida">✕</button>
@@ -308,6 +320,12 @@
     Si può mettere in pausa, trascinare lo slider per saltare a un momento preciso, o uscire in qualsiasi
     momento tornando alla vista dal vivo.</p>
 
+    <h2>Vista 2D, preferiti e fluidità</h2>
+    <p>Passa da Globo 3D a Mappa 2D nel pannello. La mappa mantiene gli stessi eventi, filtri e replay;
+    si sposta trascinando e si ingrandisce con i pulsanti + e −, la rotella o la tastiera. I luoghi preferiti
+    cambiano l'inquadratura, non filtrano i dati. Salva una vista con un nome: resta in questo browser.
+    In modalità 2D il rendering del globo è sospeso. Le animazioni automatiche riducono gli anelli nelle
+    viste affollate; scegli Ridotte per disattivarli. Quando la scheda è nascosta, animazioni e replay sono sospesi.</p>
     <h2>Condividere un evento</h2>
     <p>Ogni terremoto ha un link diretto: passando il mouse su un evento nella lista, o aprendone il dettaglio
     dopo un clic, compare un pulsante <strong>🔗 copia link</strong> che copia negli appunti un indirizzo del
@@ -341,6 +359,7 @@
 
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-<script src="main.js?v=1.8.6"></script>
+<script src="explorer.js?v=1.9.0"></script>
+<script src="main.js?v=1.9.0"></script>
 </body>
 </html>

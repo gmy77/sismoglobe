@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.8.6';
+const APP_VERSION = 'v1.9.0';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -32,6 +32,8 @@ const WINDOW_MS = { day: 86400_000, week: 7 * 86400_000, month: REPLAY_RANGE_MS 
 
 // ---------- Stato ----------
 const state = {
+  view: '3d',
+  quality: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'light' : 'auto',
   window: 'day',
   minMag: 0,
   quakes: [],        // eventi della finestra corrente
@@ -236,18 +238,23 @@ function viewportSize() {
   };
 }
 
-// Centra il globo nello spazio libero a destra del pannello desktop: il canvas
-// viene allargato oltre il bordo destro (nascosto da overflow:hidden) così che
-// il centro cada a metà dell'area visibile, non a metà finestra. Su mobile il
-// pannello è off-canvas e non deve spostare né allargare il renderer.
+// Render only the visible area beside the panel, without off-screen pixels.
+// On mobile the panel is off-canvas, so it must not shift or shrink the globe.
 function fitGlobe() {
   const panel = $('panel');
   const { width, height } = viewportSize();
-  const panelRight = panel && window.matchMedia('(min-width: 768px)').matches
-    ? panel.getBoundingClientRect().right
-    : 0;
-  globe.width(width + Math.max(0, panelRight)).height(height);
-  globe.renderer().setSize(width + Math.max(0, panelRight), height, false);
+  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+  const panelRight = panel && isDesktop ? panel.getBoundingClientRect().right : 0;
+  const left = isDesktop ? Math.max(0, panelRight + 12) : 0;
+  const top = $('topbar').offsetHeight;
+  $('globe').style.left = left + 'px';
+  $('globe').style.top = top + 'px';
+  $('map-view').style.left = left + 'px';
+  $('map-view').style.top = top + 'px';
+  const renderWidth = Math.max(1, width - left);
+  const renderHeight = Math.max(1, height - top);
+  globe.width(renderWidth).height(renderHeight);
+  globe.renderer().setSize(renderWidth, renderHeight, false);
 }
 
 function scheduleFitGlobe() {
@@ -342,6 +349,7 @@ fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json')
   .then(world => {
     countryFeatures = topojson.feature(world, world.objects.countries).features
       .filter(f => f.properties && f.properties.name && f.properties.name !== 'Antarctica');
+    flatMap.setCountries(countryFeatures);
     const lines = topojson.mesh(world, world.objects.countries).coordinates
       .map(line => line.map(([lng, lat]) => [lat, lng]));
     return addLineMesh(lines, { altitude: 0.006, color: '#8cafff', opacity: 0.55 });
@@ -406,16 +414,144 @@ fetch('https://cdn.jsdelivr.net/gh/fraxen/tectonicplates@master/GeoJSON/PB2002_b
     const lines = geojson.features
       .flatMap(f => f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [f.geometry.coordinates])
       .map(line => line.map(([lng, lat]) => [lat, lng]));
+    flatMap.plates = lines; flatMap.schedule();
     plateMesh = await addLineMesh(lines, { altitude: 0.0075, color: '#ff9f43', opacity: 0.45 });
     plateMesh.visible = $('chk-plates').checked;
   })
   .catch(err => console.error('Placche tettoniche non caricate:', err));
 
-$('chk-plates').onchange = e => { if (plateMesh) plateMesh.visible = e.target.checked; };
+$('chk-plates').onchange = e => { if (plateMesh) plateMesh.visible = e.target.checked; flatMap.showPlates = e.target.checked; flatMap.schedule(); };
 
 function flyTo(d, altitude = 1.5) {
-  globe.pointOfView({ lat: d.lat, lng: d.lng, altitude }, 1200);
+  if (state.view === '2d') flatMap.focus(d.lat, d.lng, Math.max(3, flatMap.view.zoom));
+  else globe.pointOfView({ lat: d.lat, lng: d.lng, altitude }, state.quality === 'light' ? 0 : 1200);
 }
+
+// ---------- Fonti, viste e preferiti ----------
+const sourceHealth = Object.fromEntries([
+  ['usgs', 'USGS · finestra', POLL_MS], ['month', 'USGS · storico', MONTH_POLL_MS],
+  ['emsc', 'EMSC · catalogo', EMSC_POLL_MS], ['ingv', 'INGV · ECHO', INGV_POLL_MS],
+  ['solar', 'Kp · ECHO', INGV_POLL_MS], ['stream', 'EMSC · diretta', 0],
+].map(([id, label, interval]) => [id, { label, interval, status: 'waiting', at: null }]));
+function setSource(id, status) {
+  const entry = sourceHealth[id]; entry.status = status;
+  if (status === 'ok') entry.at = Date.now();
+  renderSources();
+}
+function renderSources() {
+  const list = $('source-health'); list.replaceChildren();
+  let problems = 0;
+  for (const [id, entry] of Object.entries(sourceHealth)) {
+    const stale = entry.at && entry.interval && Date.now() - entry.at > entry.interval * 2 + 20000;
+    const problem = entry.status === 'error' || stale;
+    if (problem) problems++;
+    const status = entry.status === 'off' ? 'disattivata' : problem ? (entry.at ? 'ritardo · dati conservati' : 'non disponibile') :
+      entry.status === 'ok' ? (id === 'stream' ? 'connessa' : 'ricevuto') : entry.status === 'loading' ? 'connessione…' : 'in attesa';
+    const row = document.createElement('li'); row.dataset.status = problem ? 'error' : entry.status;
+    const label = document.createElement('b'); label.textContent = entry.label;
+    const detail = document.createElement('span');
+    detail.textContent = status + (entry.at ? ' · ' + new Date(entry.at).toLocaleTimeString('it-IT') : '');
+    row.append(label, detail); list.append(row);
+  }
+  const entries = Object.values(sourceHealth);
+  $('sources-summary').textContent = problems ? `${problems} da verificare` :
+    entries.some(e => ['waiting','loading'].includes(e.status)) ? 'connessione…' : 'collegate';
+}
+const flatMap = new SismoMap($('map-canvas'), q => showToast(q, false, {shareable:q.source !== 'emsc'}), (lat,lng) => {
+  const country = countryAt(lat,lng);
+  selectCountry(country === state.selectedCountry ? null : country);
+});
+let displayedQuakes = [], displayedRings = [];
+function renderVisualization(list, rings) {
+  displayedQuakes = list; displayedRings = rings;
+  if (document.hidden) return;
+  if (state.view === '2d') {
+    flatMap.quakes = list; flatMap.schedule(); return;
+  }
+  globe.pointsMerge(list.length > 600);
+  globe.pointsTransitionDuration(state.quality === 'light' || state.replay.active || list.length > 600 ? 0 : 300);
+  globe.pointsData(list); rebuildHitIndex(list);
+  const cap = state.quality === 'light' ? 0 : list.length > 5000 ? 6 : list.length > 600 ? 10 : 20;
+  globe.ringsData(rings.slice(0, cap));
+}
+function syncAnimation() {
+  const visible = !document.hidden && $('info').hidden;
+  if (visible && state.view === '3d') globe.resumeAnimation(); else globe.pauseAnimation();
+  flatMap.active = visible && state.view === '2d';
+  if (flatMap.active) flatMap.schedule();
+}
+function setView(view) {
+  if (view === state.view) return;
+  const previous = state.view;
+  state.view = view; hideCustomTip();
+  $('globe').hidden = view !== '3d'; $('map-view').hidden = view !== '2d';
+  $('view-3d').setAttribute('aria-pressed', String(view === '3d'));
+  $('view-2d').setAttribute('aria-pressed', String(view === '2d'));
+  $('chk-rotate').disabled = view === '2d';
+  if (view === '2d') {
+    const pov = globe.pointOfView();
+    flatMap.focus(pov.lat, pov.lng, Math.max(1, 2.6/pov.altitude)); flatMap.resize();
+  } else if (previous === '2d') {
+    globe.pointOfView({lat:flatMap.view.lat,lng:flatMap.view.lng,altitude:Math.max(.15,2.6/flatMap.view.zoom)},0);
+  }
+  syncAnimation(); render();
+}
+$('view-3d').onclick = () => setView('3d');
+$('view-2d').onclick = () => setView('2d');
+$('map-in').onclick = () => flatMap.zoom(1.5);
+$('map-out').onclick = () => flatMap.zoom(1/1.5);
+$('map-world').onclick = () => flatMap.focus(0,0,1);
+$('sel-quality').value = state.quality;
+$('sel-quality').onchange = e => {
+  state.quality = e.target.value;
+  globe.renderer().setPixelRatio(Math.min(devicePixelRatio || 1, state.quality === 'light' ? 1 : 1.25));
+  renderVisualization(displayedQuakes, displayedRings);
+};
+if (state.quality === 'light') { $('chk-rotate').checked = false; globe.controls().autoRotate = false; }
+document.addEventListener('visibilitychange', () => { syncAnimation(); if (!document.hidden) { render(); renderSources(); } });
+const FAVORITES_KEY = 'sismoglobe.views.v1';
+const presets = {world:{lat:20,lng:10,zoom:1},italy:{lat:42,lng:12.5,zoom:7},friuli:{lat:46.1,lng:13,zoom:24}};
+let favorites = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+  if (Array.isArray(saved)) favorites = saved.filter(f => f && typeof f.id === 'string' && f.id.startsWith('saved-') && typeof f.name === 'string' &&
+    Number.isFinite(f.lat) && Math.abs(f.lat)<=90 && Number.isFinite(f.lng) && Math.abs(f.lng)<=180 && Number.isFinite(f.zoom) && f.zoom>=1 && f.zoom<=30).slice(0,20);
+} catch (_) { /* storage unavailable: session-only favorites still work */ }
+function renderFavorites() {
+  const select = $('sel-place'), chosen = select.value;
+  for (const option of [...select.options]) if(option.value.startsWith('saved-')) option.remove();
+  for (const f of favorites) { const option=document.createElement('option'); option.value=f.id; option.textContent=f.name; select.append(option); }
+  select.value=chosen; $('remove-place').disabled=!chosen.startsWith('saved-');
+}
+function persistFavorites() {
+  try {localStorage.setItem(FAVORITES_KEY,JSON.stringify(favorites)); return true;}
+  catch (_) {showNotice('Memoria del browser non disponibile: preferito valido solo per questa sessione.');return false;}
+}
+$('sel-place').onchange = e => {
+  const view = presets[e.target.value] || favorites.find(f=>f.id===e.target.value);
+  $('remove-place').disabled=!e.target.value.startsWith('saved-');
+  if(!view)return;
+  // A favorite frames an area; existing data filters remain explicit and unchanged.
+  if(state.view==='2d')flatMap.focus(view.lat,view.lng,view.zoom);
+  else globe.pointOfView({lat:view.lat,lng:view.lng,altitude:Math.max(.15,2.6/view.zoom)},state.quality==='light'?0:900);
+  $('chk-rotate').checked=false;globe.controls().autoRotate=false;
+};
+$('save-place').onclick = () => { $('favorite-form').hidden=false; $('favorite-name').focus(); };
+$('cancel-favorite').onclick = () => { $('favorite-form').hidden=true; };
+$('favorite-form').onsubmit = e => {
+  e.preventDefault();const name=$('favorite-name').value.trim();if(!name)return;
+  if(favorites.length>=20){showNotice('Puoi salvare fino a 20 viste. Rimuovine una per aggiungerne un’altra.');return;}
+  const pov=globe.pointOfView();
+  const view=state.view==='2d'?{...flatMap.view}:{lat:pov.lat,lng:((pov.lng+180)%360+360)%360-180,zoom:Math.max(1,Math.min(30,2.6/pov.altitude))};
+  const favorite={id:'saved-'+Date.now(),name,...view};favorites.push(favorite);
+  const persisted=persistFavorites();renderFavorites();$('sel-place').value=favorite.id;$('remove-place').disabled=false;
+  $('favorite-form').hidden=true;$('favorite-name').value='';if(persisted)showNotice('Vista salvata in questo browser.');
+};
+$('remove-place').onclick = () => {
+  favorites=favorites.filter(f=>f.id!==$('sel-place').value);persistFavorites();$('sel-place').value='';renderFavorites();
+};
+renderFavorites();renderSources();
+
 
 // ---------- Audio ----------
 let audioCtx = null;
@@ -578,7 +714,10 @@ function customPickingActive() {
   const el = $('globe');
   let downAt = null;
 
+  let lastPick = 0;
   el.addEventListener('pointermove', ev => {
+    if (downAt || performance.now() - lastPick < 50) return;
+    lastPick = performance.now();
     if (!customPickingActive()) { hideCustomTip(); return; }
     const q = pickQuakeAt(ev.clientX, ev.clientY);
     if (q) {
@@ -591,7 +730,8 @@ function customPickingActive() {
   });
 
   el.addEventListener('pointerleave', hideCustomTip);
-  el.addEventListener('pointerdown', ev => { downAt = { x: ev.clientX, y: ev.clientY }; });
+  el.addEventListener('pointercancel', () => { downAt = null; hideCustomTip(); });
+  el.addEventListener('pointerdown', ev => { hideCustomTip(); downAt = { x: ev.clientX, y: ev.clientY }; });
 
   // Un clic vale solo se il puntatore non si è spostato: trascinando si ruota
   // il globo, e non deve partire l'azione sull'epicentro.
@@ -627,19 +767,10 @@ function render() {
   const vis = visibleQuakes();
   const now = Date.now();
 
-  // Nelle viste affollate (7g/30g) i punti vengono fusi in un'unica mesh:
-  // molto più fluido, si perde solo il tooltip al passaggio del mouse
-  globe.pointsMerge(vis.length > 600);
-  globe.pointsData(vis);
-  rebuildHitIndex(vis);   // puntamento a mano quando i punti sono fusi
-  // Anelli solo su eventi recenti (o M>=5 se si guarda un giorno passato),
-  // limitati ai 20 più forti: ogni anello animato costa parecchi frame
   const rings = (state.selectedDay
     ? vis.filter(q => q.mag >= 5)
-    : vis.filter(q => now - q.time < RING_WINDOW_MS))
-    .sort((a, b) => b.mag - a.mag)
-    .slice(0, 20);
-  globe.ringsData(rings);
+    : vis.filter(q => now - q.time < RING_WINDOW_MS)).sort((a, b) => b.mag - a.mag);
+  renderVisualization(vis, rings);
 
   renderList(vis);
   renderStats();
@@ -776,12 +907,14 @@ function selectCountry(feature) {
 
 // ---------- Replay dei 30 giorni ----------
 let replayTimer = null;
+let lastReplayList = -Infinity;
 
 function startReplay() {
   if (!state.monthQuakes.length) {
     showNotice('⏳ Dati ancora in caricamento, riprova tra un istante.');
     return;
   }
+  lastReplayList = -Infinity;
   state.replay.active = true;
   state.replay.playing = true;
   state.replay.t = 0;
@@ -804,7 +937,7 @@ function exitReplay() {
 }
 
 function replayTick() {
-  if (!state.replay.playing) return;
+  if (!state.replay.playing || document.hidden) return;
   state.replay.t += REPLAY_STEP_MS;
   if (state.replay.t >= REPLAY_RANGE_MS) {
     state.replay.t = REPLAY_RANGE_MS;
@@ -819,6 +952,7 @@ function toggleReplayPlay() {
   state.replay.playing = !state.replay.playing;
   $('replay-playpause').textContent = state.replay.playing ? '⏸️' : '▶️';
   clearInterval(replayTimer);
+  if (!state.replay.playing) renderReplayFrame();
   if (state.replay.playing) {
     if (state.replay.t >= REPLAY_RANGE_MS) state.replay.t = 0; // riparte se era arrivato in fondo
     replayTimer = setInterval(replayTick, REPLAY_TICK_MS);
@@ -828,15 +962,12 @@ function toggleReplayPlay() {
 function renderReplayFrame() {
   const virtualNow = Date.now() - REPLAY_RANGE_MS + state.replay.t;
   const list = state.monthQuakes.filter(q => q.time <= virtualNow && q.time > virtualNow - REPLAY_TRAIL_MS);
-  globe.pointsMerge(list.length > 600);
-  globe.pointsData(list);
-  rebuildHitIndex(list);
-  const rings = list
-    .filter(q => virtualNow - q.time < 3 * 3600_000)
-    .sort((a, b) => b.mag - a.mag)
-    .slice(0, 20);
-  globe.ringsData(rings);
-  renderList(list);
+  const rings = list.filter(q => virtualNow - q.time < RING_WINDOW_MS).sort((a,b) => b.mag-a.mag);
+  renderVisualization(list, rings);
+  // The map follows every replay tick; rebuild the long DOM list at most once a second.
+  if (!state.replay.playing || performance.now() - lastReplayList > 1000) {
+    renderList(list); lastReplayList = performance.now();
+  }
   $('replay-slider').value = Math.round((state.replay.t / REPLAY_RANGE_MS) * 1000);
   $('replay-date').textContent = fmtTime(virtualNow);
 }
@@ -888,9 +1019,11 @@ function connectEmsc() {
   try {
     emscWs = new WebSocket(EMSC_WS_URL);
   } catch (err) {
-    scheduleEmscReconnect();
+    setSource('stream', 'error'); scheduleEmscReconnect();
     return;
   }
+  setSource('stream', 'loading');
+  emscWs.onopen = () => setSource('stream', 'ok');
   emscWs.onmessage = ev => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch (_) { return; }
@@ -923,7 +1056,7 @@ function connectEmsc() {
     showToast(q, true, { label: '⚡ EMSC in diretta', shareable: false });
     beep(q.mag);
   };
-  emscWs.onclose = () => { emscWs = null; scheduleEmscReconnect(); };
+  emscWs.onclose = () => { emscWs = null; setSource('stream', 'error'); scheduleEmscReconnect(); };
   emscWs.onerror = () => { if (emscWs) emscWs.close(); };
 }
 
@@ -933,6 +1066,7 @@ function scheduleEmscReconnect() {
 }
 
 function disconnectEmsc() {
+  setSource('stream', 'off');
   clearTimeout(emscReconnectTimer);
   emscReconnectTimer = null;
   if (emscWs) { emscWs.onclose = null; emscWs.close(); emscWs = null; }
@@ -1020,15 +1154,17 @@ function mergeExtrasIntoState() {
 // (Promise.allSettled): se una delle due fallisce l'altra resta comunque utile,
 // invece di perdere tutto per un problema isolato a un solo endpoint.
 async function loadSismoFvg() {
+  setSource('ingv', 'loading'); setSource('solar', 'loading');
   const [evRes, solRes] = await Promise.allSettled([
-    fetch(`${INGV_API}?giorni=30&mag=${INGV_MIN_MAG}`, { cache: 'no-store' }),
-    fetch(SOLAR_API, { cache: 'no-store' }),
+    fetch(`${INGV_API}?giorni=30&mag=${INGV_MIN_MAG}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) }),
+    fetch(SOLAR_API, { cache: 'no-store', signal: AbortSignal.timeout(20000) }),
   ]);
 
   if (evRes.status === 'fulfilled' && evRes.value.ok) {
     try {
       const data = await evRes.value.json();
-      state.ingvQuakes = (data.events || [])
+      if (!Array.isArray(data.events)) throw new Error('Catalogo INGV non valido');
+      state.ingvQuakes = data.events
         .map(e => ({
           id: 'ingv-' + e.event_id,
           lat: e.latitudine,
@@ -1041,9 +1177,10 @@ async function loadSismoFvg() {
           source: 'ingv',
         }))
         .filter(q => q.time); // scarta eventuali orari non interpretabili
-      mergeExtrasIntoState();
-    } catch (err) { console.error('Eventi INGV (sismo-fvg) non interpretabili:', err); }
+      mergeExtrasIntoState(); setSource('ingv', 'ok');
+    } catch (err) { setSource('ingv', 'error'); console.error('Eventi INGV (sismo-fvg) non interpretabili:', err); }
   } else {
+    setSource('ingv', 'error');
     console.error('Eventi INGV (sismo-fvg) non raggiungibili:', evRes.reason || evRes.value?.status);
   }
 
@@ -1053,9 +1190,11 @@ async function loadSismoFvg() {
       if (Array.isArray(days) && days.length) {
         const latest = days[0]; // query ordina già DESC per giorno
         state.kp = { day: latest.giorno, max: latest.kp_max, avg: latest.kp_avg };
-      }
-    } catch (err) { console.error('Dati solari (sismo-fvg) non interpretabili:', err); }
+        setSource('solar', 'ok');
+      } else throw new Error('Dati solari assenti');
+    } catch (err) { setSource('solar', 'error'); console.error('Dati solari (sismo-fvg) non interpretabili:', err); }
   } else {
+    setSource('solar', 'error');
     console.error('Dati solari (sismo-fvg) non raggiungibili:', solRes.reason || solRes.value?.status);
   }
 
@@ -1070,13 +1209,15 @@ async function loadSismoFvg() {
 // in diretta passa al catalogo senza comparire due volte, e resta condivisibile
 // con ?id= (openSharedQuake lo trova nel mese).
 async function loadEmscCatalog() {
+  setSource('emsc', 'loading');
   try {
     const start = new Date(Date.now() - REPLAY_RANGE_MS).toISOString().slice(0, 19);
-    const r = await fetch(`${EMSC_FDSN}?format=json&minmag=${EMSC_MIN_MAG}&start=${start}&limit=20000`);
+    const r = await fetch(`${EMSC_FDSN}?format=json&minmag=${EMSC_MIN_MAG}&start=${start}&limit=20000`, { signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     // FDSN risponde 204 senza corpo quando non ci sono eventi
     const data = r.status === 204 ? { features: [] } : await r.json();
-    state.emscQuakes = (data.features || [])
+    if (!Array.isArray(data.features)) throw new Error('Catalogo EMSC non valido');
+    state.emscQuakes = data.features
       .map(f => f.properties)
       .filter(p => p && p.unid && p.mag != null && p.lat != null && p.lon != null)
       .map(p => ({
@@ -1093,7 +1234,9 @@ async function loadEmscCatalog() {
       }))
       .filter(q => q.time);
     mergeExtrasIntoState();
+    setSource('emsc', 'ok');
   } catch (err) {
+    setSource('emsc', 'error');
     console.error('Catalogo EMSC non raggiungibile:', err);
     return;
   }
@@ -1106,8 +1249,9 @@ async function loadEmscCatalog() {
 let feedRequestSeq = 0;
 async function loadFeed() {
   const seq = ++feedRequestSeq;
+  setSource('usgs', 'loading');
   try {
-    const r = await fetch(USGS + FEEDS[state.window], { cache: 'no-store' });
+    const r = await fetch(USGS + FEEDS[state.window], { cache: 'no-store', signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const quakes = parseFeed(await r.json());
     // Se nel frattempo la finestra è cambiata di nuovo (es. 24h→7g→24h fatto
@@ -1150,6 +1294,7 @@ async function loadFeed() {
     setLive(true);
     render();
   } catch (err) {
+    if (seq !== feedRequestSeq) return;
     console.error('Feed USGS non raggiungibile:', err);
     setLive(false);
   }
@@ -1164,14 +1309,18 @@ function markNewInList(id) {
 }
 
 async function loadMonth() {
+  setSource('month', 'loading');
   try {
-    const r = await fetch(USGS + FEEDS.month, { cache: 'no-store' });
+    const r = await fetch(USGS + FEEDS.month, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     state.monthQuakes = parseFeed(await r.json());
+    setSource('month', 'ok');
     mergeExtrasIntoState(); // riaggiunge gli eventi INGV/EMSC in cache: loadMonth() li avrebbe appena sovrascritti
     renderHistogram();
     renderStats();
+    if (state.selectedDay || state.replay.active) render();
   } catch (err) {
+    setSource('month', 'error');
     console.error('Feed mensile non raggiungibile:', err);
   }
 }
@@ -1180,6 +1329,7 @@ async function loadMonth() {
 // letto da state.quakes a ogni renderLive(), così resta allineato al globo
 // anche quando un evento EMSC/INGV arriva tra un poll e l'altro.
 function setLive(ok) {
+  setSource('usgs', ok ? 'ok' : 'error');
   state.live.ok = ok;
   if (ok) state.live.at = new Date();
   renderLive();
@@ -1202,10 +1352,11 @@ $('sel-window').onchange = e => {
   loadFeed();
 };
 
+let filterFrame = 0;
 $('sel-mag').oninput = e => {
   state.minMag = parseFloat(e.target.value);
   $('mag-val').textContent = state.minMag;
-  render();
+  if (!filterFrame) filterFrame = requestAnimationFrame(() => { filterFrame = 0; render(); });
 };
 
 $('chk-sound').onchange = e => {
@@ -1258,6 +1409,7 @@ function toggleInfo(open) {
   document.body.classList.toggle('info-open', show);
   $('btn-info').setAttribute('aria-expanded', String(show));
   if (show) info.scrollTop = 0;
+  syncAnimation();
 }
 $('btn-info').onclick = () => toggleInfo();
 $('info-close').onclick = () => toggleInfo(false);
@@ -1278,7 +1430,7 @@ backdrop.onclick = () => togglePanel(false);
 panel.addEventListener('click', (e) => {
   if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') {
     // Non chiudere subito per select (altrimenti non si apre), solo per click su link/button
-    if (e.target.tagName !== 'SELECT') {
+    if (e.target.tagName !== 'SELECT' && !e.target.closest('#explore-box')) {
       setTimeout(() => togglePanel(false), 200);
     }
   }
@@ -1296,7 +1448,11 @@ window.addEventListener('resize', scheduleFitGlobe);
 window.visualViewport?.addEventListener('resize', scheduleFitGlobe);
 
 // Aggiorna i "tempo fa" della lista una volta al minuto
-setInterval(() => render(), POLL_MS);
+setInterval(() => {
+  if (document.hidden) return;
+  if (!state.replay.active) renderList(visibleQuakes());
+  renderSources();
+}, POLL_MS);
 
 // ---------- Avvio ----------
 // Diagnostica da console: attiva in locale e, su richiesta esplicita, con
@@ -1304,7 +1460,7 @@ setInterval(() => render(), POLL_MS);
 // quando c'è da indagare un problema; di suo, in produzione, non è esposta.
 if (['localhost', '127.0.0.1'].includes(location.hostname) ||
     new URLSearchParams(location.search).has('debug')) {
-  window.SG = { globe, state };
+  window.SG = { globe, state, flatMap };
 }
 // Link diretto a un evento (?id=...): cercato solo nei 30 giorni disponibili,
 // gli eventi più vecchi non sono raggiungibili con questa app.
