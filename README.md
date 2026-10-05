@@ -40,3 +40,7 @@ poi aprire <http://localhost:8642>.
 - Terremoti minori: [EMSC – FDSN event web service](https://www.seismicportal.eu/fdsn-wsevent.html)
 - Confini: [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth 110m)
 - Rendering: [globe.gl](https://globe.gl) (three.js)
+
+## Anteprima v1.9.0 (da verificare nel browser)
+
+Vista 2D, preferiti geografici e stato delle fonti, con animazioni ridotte e rendering sospeso quando non visibile. Vedi `REVIEW-v1.9.0.md` per modifiche, test e stato della pubblicazione.
