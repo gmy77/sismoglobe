@@ -228,22 +228,40 @@ globe.controls().autoRotateSpeed = 0.4;
 // parte un po' più piccolo ma tutto visibile sotto la barra.
 globe.pointOfView({ lat: 20, lng: 10, altitude: 2.6 });
 
-// Centra il globo nello spazio libero a destra del pannello: il canvas viene
-// allargato oltre il bordo destro (nascosto da overflow:hidden) così che il
-// centro cada a metà dell'area visibile, non a metà finestra.
+function viewportSize() {
+  const vv = window.visualViewport;
+  return {
+    width: Math.round(vv?.width || document.documentElement.clientWidth || window.innerWidth),
+    height: Math.round(vv?.height || document.documentElement.clientHeight || window.innerHeight),
+  };
+}
+
+// Centra il globo nello spazio libero a destra del pannello desktop: il canvas
+// viene allargato oltre il bordo destro (nascosto da overflow:hidden) così che
+// il centro cada a metà dell'area visibile, non a metà finestra. Su mobile il
+// pannello è off-canvas e non deve spostare né allargare il renderer.
 function fitGlobe() {
   const panel = $('panel');
-  const pw = panel && panel.offsetWidth > 0 ? panel.getBoundingClientRect().right : 0;
-  globe.width(window.innerWidth + Math.max(0, pw)).height(window.innerHeight);
+  const { width, height } = viewportSize();
+  const panelRight = panel && window.matchMedia('(min-width: 768px)').matches
+    ? panel.getBoundingClientRect().right
+    : 0;
+  globe.width(width + Math.max(0, panelRight)).height(height);
+  globe.renderer().setSize(width + Math.max(0, panelRight), height, false);
+}
+
+function scheduleFitGlobe() {
+  fitGlobe();
+  requestAnimationFrame(fitGlobe);
 }
 
 // Pannello e avvisi partono sotto la barra, qualunque sia la sua altezza reale
 function syncTopbarHeight() {
   document.documentElement.style.setProperty('--topbar-h', $('topbar').offsetHeight + 'px');
 }
-new ResizeObserver(() => { syncTopbarHeight(); fitGlobe(); }).observe($('topbar'));
+new ResizeObserver(() => { syncTopbarHeight(); scheduleFitGlobe(); }).observe($('topbar'));
 syncTopbarHeight();
-fitGlobe();
+scheduleFitGlobe();
 
 // Confini nazionali (TopoJSON world-atlas), fusi in un'unica mesh di linee:
 // il layer poligoni di globe.gl genera ~1400 draw call, questa 1 sola.
@@ -1274,7 +1292,8 @@ $('globe').addEventListener('pointerup', () => {
   setTimeout(() => { globe.controls().autoRotate = $('chk-rotate').checked; }, 3000);
 });
 
-window.addEventListener('resize', fitGlobe);
+window.addEventListener('resize', scheduleFitGlobe);
+window.visualViewport?.addEventListener('resize', scheduleFitGlobe);
 
 // Aggiorna i "tempo fa" della lista una volta al minuto
 setInterval(() => render(), POLL_MS);
