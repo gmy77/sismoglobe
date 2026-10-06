@@ -136,6 +136,10 @@ function quakeWaveformPath(q, width = 268, height = 52) {
 function quakeWaveformSvg(q) {
   const color = magColor(q.mag);
   const path = quakeWaveformPath(q);
+  const flag = quakeFlag(q);
+  const flagNote = flag
+    ? `<div class="waveform-flag" style="color:${flag.color}">${flag.icon} ${flag.label} — ${flag.detail}</div>`
+    : '';
   return `
     <div class="waveform" aria-label="Profilo stimato del terremoto">
       <div class="waveform-head">
@@ -147,7 +151,53 @@ function quakeWaveformSvg(q) {
         <path class="waveform-line" d="${path}" style="stroke:${color}"></path>
       </svg>
       <div class="waveform-note">non è un sismogramma: non distingue terremoto, frana o esplosione</div>
+      ${flagNote}
     </div>`;
+}
+
+// Classificazione reale dell'evento, dichiarata dalla fonte (non stimata da
+// noi): EMSC valorizza "evtype" secondo il formato ISF (standard ISC,
+// www.isc.ac.uk/standards/isf/), USGS valorizza "type" nel GeoJSON. Un badge
+// compare solo per gli eventi che NON sono un terremoto tettonico confermato,
+// per non appesantire la lista nel caso comune.
+const EMSC_EVTYPE_INFO = {
+  se: { icon: '❓', label: 'non confermato', detail: 'EMSC: terremoto sospetto (se), non ancora confermato' },
+  uk: { icon: '❓', label: 'tipo sconosciuto', detail: 'EMSC: tipo di evento non specificato' },
+  ls: { icon: '🏔️', label: 'possibile frana', detail: 'EMSC: landslide (ls)' },
+  kr: { icon: '⛏️', label: 'non tettonico', detail: 'EMSC: scossa di miniera nota (kr)' },
+  sr: { icon: '⛏️', label: 'non tettonico (sospetto)', detail: 'EMSC: scossa di miniera sospetta (sr)' },
+  ki: { icon: '🏭', label: 'evento indotto', detail: 'EMSC: evento indotto noto (ki)' },
+  si: { icon: '🏭', label: 'evento indotto (sospetto)', detail: 'EMSC: evento indotto sospetto (si)' },
+  km: { icon: '💥', label: 'esplosione mineraria', detail: 'EMSC: esplosione mineraria nota (km)' },
+  sm: { icon: '💥', label: 'esplosione mineraria (sospetta)', detail: 'EMSC: esplosione mineraria sospetta (sm)' },
+  kh: { icon: '💥', label: 'esplosione chimica', detail: 'EMSC: esplosione chimica nota (kh)' },
+  sh: { icon: '💥', label: 'esplosione chimica (sospetta)', detail: 'EMSC: esplosione chimica sospetta (sh)' },
+  kx: { icon: '💥', label: 'esplosione sperimentale', detail: 'EMSC: esplosione sperimentale nota (kx)' },
+  sx: { icon: '💥', label: 'esplosione sperimentale (sospetta)', detail: 'EMSC: esplosione sperimentale sospetta (sx)' },
+  kn: { icon: '☢️', label: 'esplosione nucleare', detail: 'EMSC: esplosione nucleare nota (kn)' },
+  sn: { icon: '☢️', label: 'esplosione nucleare (sospetta)', detail: 'EMSC: esplosione nucleare sospetta (sn)' },
+};
+const USGS_TYPE_INFO = {
+  explosion: { icon: '💥', label: 'esplosione' },
+  'quarry blast': { icon: '💥', label: 'brillamento di cava' },
+  'nuclear explosion': { icon: '☢️', label: 'esplosione nucleare' },
+  landslide: { icon: '🏔️', label: 'possibile frana' },
+  'rock burst': { icon: '⛏️', label: 'scossa di miniera' },
+  'ice quake': { icon: '🧊', label: 'scossa glaciale' },
+  'other event': { icon: '❓', label: 'tipo non classificato' },
+  'not reported': { icon: '❓', label: 'tipo non riportato' },
+};
+
+function quakeFlag(q) {
+  if (q.utype && q.utype !== 'earthquake') {
+    const info = USGS_TYPE_INFO[q.utype] || { icon: '❓', label: q.utype };
+    return { icon: info.icon, label: info.label, color: '#ffb84d', detail: `USGS: ${q.utype}${q.locStatus === 'automatic' ? ' · localizzazione automatica' : ''}` };
+  }
+  if (q.evtype && q.evtype !== 'ke' && q.evtype !== 'de' && q.evtype !== 'fe') {
+    const info = EMSC_EVTYPE_INFO[q.evtype];
+    if (info) return { icon: info.icon, label: info.label, color: '#ffb84d', detail: info.detail };
+  }
+  return null;
 }
 
 function parseFeed(geojson) {
@@ -163,6 +213,10 @@ function parseFeed(geojson) {
       time: f.properties.time,
       url: f.properties.url,
       tsunami: f.properties.tsunami === 1,
+      // "type" (earthquake/quarry blast/explosion/landslide/...) e "status"
+      // (automatic/reviewed) arrivano già nel GeoJSON USGS, a costo zero.
+      utype: f.properties.type,
+      locStatus: f.properties.status,
     }))
     .sort((a, b) => b.time - a.time);
 }
@@ -191,12 +245,15 @@ const globe = Globe({ rendererConfig: { antialias: true, powerPreference: 'high-
   .pointRadius(d => Math.max(0.13, d.mag * d.mag * 0.032))
   .pointResolution(6)
   .pointsTransitionDuration(300)
-  .pointLabel(d => `
+  .pointLabel(d => {
+    const flag = quakeFlag(d);
+    return `
     <div class="globe-tip">
       <b style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</b> — ${d.place}<br>
       ${fmtTime(d.time)} (${timeAgo(d.time)})<br>
-      Profondità: ${fmtDepth(d.depth)} <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}
-    </div>`)
+      Profondità: ${fmtDepth(d.depth)} <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}${flag ? `<br><span style="color:${flag.color}">${flag.icon} ${flag.label}</span> <span class="tip-hint">(${flag.detail})</span>` : ''}
+    </div>`;
+  })
   .onPointClick(d => { flyTo(d, 1.2); showToast(d, false); })
   // Anelli: onde sismiche animate sugli eventi recenti
   .ringLat('lat').ringLng('lng')
@@ -847,10 +904,14 @@ function renderList(vis) {
         : q.source === 'emsc-cat'
           ? ' <span class="q-src" title="Fonte: catalogo EMSC (European-Mediterranean Seismological Centre) — evento non presente sul feed USGS">EMSC</span>'
           : '';
+    const flag = quakeFlag(q);
+    const flagTag = flag
+      ? ` <span class="q-flag" style="color:${flag.color};border-color:${flag.color}" title="${flag.detail}">${flag.icon} ${flag.label}</span>`
+      : '';
     li.innerHTML = `
       <span class="mag-badge" style="background:${magColor(q.mag)}">${q.mag.toFixed(1)}</span>
       <div class="q-info">
-        <div class="q-place">${q.place}${srcTag}</div>
+        <div class="q-place">${q.place}${srcTag}${flagTag}</div>
         <div class="q-meta">${fmtTime(q.time)} · ${timeAgo(q.time)} · ${fmtDepth(q.depth)}</div>
       </div>
       ${shareBtn}`;
@@ -1085,6 +1146,8 @@ function connectEmsc() {
       lng: p.lon,
       tsunami: false,
       source: 'emsc',
+      evtype: p.evtype,
+      auth: p.auth,
     };
     state.emscPending.push(q);
     if (state.emscPending.length > EMSC_PENDING_CAP) state.emscPending.shift();
@@ -1274,6 +1337,10 @@ async function loadEmscCatalog() {
         url: 'https://www.seismicportal.eu/eventdetails.html?unid=' + encodeURIComponent(p.unid),
         tsunami: false,
         source: 'emsc-cat',
+        // Classificazione ISF dell'evento (ke/se/ls/km/...) e agenzia che lo
+        // ha localizzato: già nella risposta FDSN, non richiedono altre chiamate.
+        evtype: p.evtype,
+        auth: p.auth,
       }))
       .filter(q => q.time);
     mergeExtrasIntoState();
