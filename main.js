@@ -137,16 +137,16 @@ function quakeWaveformSvg(q) {
   const color = magColor(q.mag);
   const path = quakeWaveformPath(q);
   return `
-    <div class="waveform" aria-label="Forma d'onda indicativa del terremoto">
+    <div class="waveform" aria-label="Profilo stimato del terremoto">
       <div class="waveform-head">
-        <span>forma d'onda</span>
+        <span>profilo stimato</span>
         <span>M ${q.mag.toFixed(1)} · ${fmtDepth(q.depth)}</span>
       </div>
       <svg viewBox="0 0 268 52" role="img" aria-hidden="true" focusable="false">
         <path class="waveform-grid" d="M0 26 H268 M0 13 H268 M0 39 H268"></path>
         <path class="waveform-line" d="${path}" style="stroke:${color}"></path>
       </svg>
-      <div class="waveform-note">profilo stimato, non sismogramma ufficiale</div>
+      <div class="waveform-note">non è un sismogramma: non distingue terremoto, frana o esplosione</div>
     </div>`;
 }
 
