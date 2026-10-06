@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.9.0';
+const APP_VERSION = 'v1.9.1';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const POLL_MS = 60_000;          // refresh feed corrente
@@ -106,6 +106,48 @@ function fmtEnergy(j) {
   if (tnt >= 1e6) return (tnt / 1e6).toFixed(1) + ' Mt';
   if (tnt >= 1e3) return (tnt / 1e3).toFixed(1) + ' kt';
   return tnt.toFixed(1) + ' t';
+}
+
+function quakeWaveformPath(q, width = 268, height = 52) {
+  const mid = height / 2;
+  const mag = Math.max(0, q.mag || 0);
+  const depth = q.depth != null ? Math.max(0, q.depth) : 10;
+  const depthDamping = 1 - Math.min(0.62, depth / 700);
+  const amp = Math.max(5, Math.min(22, (5 + mag * 2.2) * depthDamping));
+  const decay = 2.2 + Math.max(0, 7 - mag) * 0.32 + Math.min(1.2, depth / 260);
+  const seed = Math.abs(Math.sin((q.time || 1) * 0.000001 + q.lat * 12.9898 + q.lng * 78.233)) * 3.5;
+  const steps = 86;
+  let path = '';
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = t * width;
+    const attack = Math.min(1, t * 9);
+    const envelope = attack * Math.exp(-t * decay);
+    const carrier =
+      Math.sin(t * Math.PI * (18 + mag * 1.9) + seed) * 0.72 +
+      Math.sin(t * Math.PI * (43 + mag * 3.1) + seed * 0.6) * 0.28 +
+      Math.sin(t * Math.PI * (91 + mag * 2.2) + seed * 1.4) * 0.14;
+    const y = mid - carrier * amp * envelope;
+    path += `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)} `;
+  }
+  return path.trim();
+}
+
+function quakeWaveformSvg(q) {
+  const color = magColor(q.mag);
+  const path = quakeWaveformPath(q);
+  return `
+    <div class="waveform" aria-label="Forma d'onda indicativa del terremoto">
+      <div class="waveform-head">
+        <span>forma d'onda</span>
+        <span>M ${q.mag.toFixed(1)} · ${fmtDepth(q.depth)}</span>
+      </div>
+      <svg viewBox="0 0 268 52" role="img" aria-hidden="true" focusable="false">
+        <path class="waveform-grid" d="M0 26 H268 M0 13 H268 M0 39 H268"></path>
+        <path class="waveform-line" d="${path}" style="stroke:${color}"></path>
+      </svg>
+      <div class="waveform-note">profilo stimato, non sismogramma ufficiale</div>
+    </div>`;
 }
 
 function parseFeed(geojson) {
@@ -583,6 +625,7 @@ function showToast(d, isNew = true, opts = {}) {
   el.innerHTML = `
     <div class="t-title">${title} — <span style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</span></div>
     <div class="t-body">${d.place}<br>${fmtTime(d.time)} · prof. ${fmtDepth(d.depth)}${d.tsunami ? ' · ⚠️ tsunami' : ''}</div>
+    ${quakeWaveformSvg(d)}
     ${shareBtn}`;
   el.onclick = () => { flyTo(d, 1.2); dismiss(); };
   if (shareBtn) el.querySelector('.t-share').onclick = ev => { ev.stopPropagation(); shareQuake(d); };
