@@ -1,11 +1,13 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.9.2';
+const APP_VERSION = 'v1.9.3';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
+const NOAA_XRAY_API = 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json';
 const POLL_MS = 60_000;          // refresh feed corrente
 const MONTH_POLL_MS = 10 * 60_000; // refresh istogramma 30gg
+const XRAY_CACHE_MS = 5 * 60_000; // il grafico NOAA viene scaricato solo a pannello aperto
 const RING_WINDOW_MS = 3 * 3600_000; // anelli animati per eventi recenti
 const REPLAY_RANGE_MS = 30 * 86400_000;   // copre l'intero istogramma dei 30 giorni
 const REPLAY_TRAIL_MS = 24 * 3600_000;    // finestra di eventi visibili in un dato istante del replay
@@ -51,6 +53,7 @@ const state = {
   emscQuakes: [],  // cache 30 giorni del catalogo EMSC (fonte 'emsc-cat'), indipendente dalla finestra
   live: { ok: null, at: null }, // esito (true/false, null = in attesa) e Date dell'ultimo poll USGS
   kp: null,        // { day, max, avg } ultimo giorno disponibile del feed solare NOAA (via sismo-fvg), o null se non ancora caricato
+  xray: { loading: false, error: null, loadedAt: 0, short: [], long: [] }, // flusso GOES X-ray NOAA SWPC, caricato a richiesta
 };
 
 // ---------- Utility ----------
@@ -71,6 +74,20 @@ function kpColor(kp) {
   if (kp >= 5) return '#ff7a00';
   if (kp >= 4) return '#ffe14d';
   return '#68e07f';
+}
+
+function flareClass(flux) {
+  if (!Number.isFinite(flux) || flux <= 0) return 'n/d';
+  const bands = [
+    ['X', 1e-4],
+    ['M', 1e-5],
+    ['C', 1e-6],
+    ['B', 1e-7],
+    ['A', 1e-8],
+  ];
+  const [letter, base] = bands.find(([, threshold]) => flux >= threshold) || ['A', 1e-8];
+  if (flux < 1e-8) return '<A1';
+  return letter + Math.min(99.9, flux / base).toFixed(1);
 }
 
 function fmtTime(t) {
@@ -948,6 +965,124 @@ function renderStats() {
   }
 }
 
+function xrayPoint(row) {
+  const time = Date.parse(row.time_tag);
+  const flux = Number(row.flux);
+  if (!time || !Number.isFinite(flux) || flux <= 0) return null;
+  return { time, flux, satellite: row.satellite };
+}
+
+function latestPoint(list) {
+  return list.length ? list[list.length - 1] : null;
+}
+
+function formatXrayTime(t) {
+  return new Date(t).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderFlareChart() {
+  const chart = $('flare-chart');
+  const summary = $('flare-summary');
+  const updated = $('flare-updated');
+  const { loading, error, short, long, loadedAt } = state.xray;
+
+  if (loading && !long.length && !short.length) {
+    summary.textContent = 'Caricamento del flusso X-ray NOAA SWPC…';
+    updated.textContent = 'NOAA SWPC';
+    chart.innerHTML = '<div class="flare-empty">Caricamento grafico GOES…</div>';
+    return;
+  }
+  if (error) {
+    summary.textContent = 'Grafico non disponibile in questo momento.';
+    updated.textContent = 'NOAA SWPC';
+    chart.innerHTML = `<div class="flare-empty">${error}</div>`;
+    return;
+  }
+  if (!long.length && !short.length) {
+    summary.textContent = 'Nessun dato GOES disponibile.';
+    updated.textContent = 'NOAA SWPC';
+    chart.innerHTML = '<div class="flare-empty">Nessun punto NOAA SWPC ricevuto.</div>';
+    return;
+  }
+
+  const all = [...short, ...long].sort((a, b) => a.time - b.time);
+  const minT = all[0].time;
+  const maxT = all[all.length - 1].time;
+  const minLog = -9;
+  const maxLog = -3;
+  const w = 520, h = 230;
+  const m = { l: 48, r: 14, t: 14, b: 30 };
+  const innerW = w - m.l - m.r;
+  const innerH = h - m.t - m.b;
+  const x = t => m.l + ((t - minT) / Math.max(1, maxT - minT)) * innerW;
+  const y = flux => {
+    const v = Math.max(minLog, Math.min(maxLog, Math.log10(flux)));
+    return m.t + ((maxLog - v) / (maxLog - minLog)) * innerH;
+  };
+  const path = list => list.map((p, i) => `${i ? 'L' : 'M'}${x(p.time).toFixed(1)},${y(p.flux).toFixed(1)}`).join(' ');
+  const levels = [
+    ['X', 1e-4],
+    ['M', 1e-5],
+    ['C', 1e-6],
+    ['B', 1e-7],
+    ['A', 1e-8],
+  ];
+  const timeTicks = [minT, minT + (maxT - minT) / 2, maxT];
+  const latest = latestPoint(long) || latestPoint(short);
+  const peak = long.reduce((best, p) => (!best || p.flux > best.flux ? p : best), null);
+  summary.textContent = latest
+    ? `Ultimo ${flareClass(latest.flux)} · picco 6h ${peak ? flareClass(peak.flux) : 'n/d'} · satellite GOES-${latest.satellite || '?'}`
+    : 'Flusso X-ray NOAA SWPC nelle ultime 6 ore.';
+  updated.textContent = loadedAt ? `agg. ${formatXrayTime(loadedAt)}` : 'NOAA SWPC';
+
+  chart.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <rect x="0" y="0" width="${w}" height="${h}" fill="transparent"></rect>
+      ${levels.map(([label, flux]) => {
+        const yy = y(flux).toFixed(1);
+        return `<line class="flare-grid ${label === 'M' || label === 'X' ? 'flare-threshold' : ''}" x1="${m.l}" x2="${w - m.r}" y1="${yy}" y2="${yy}"></line><text class="flare-axis" x="10" y="${Number(yy) + 3}">${label}</text>`;
+      }).join('')}
+      ${timeTicks.map(t => `<text class="flare-axis" x="${x(t).toFixed(1)}" y="${h - 9}" text-anchor="middle">${formatXrayTime(t)}</text>`).join('')}
+      <path class="flare-path-short" d="${path(short)}"></path>
+      <path class="flare-path-long" d="${path(long)}"></path>
+    </svg>`;
+}
+
+async function loadXrayFlux(force = false) {
+  if (state.xray.loading) return;
+  if (!force && Date.now() - state.xray.loadedAt < XRAY_CACHE_MS && (state.xray.long.length || state.xray.short.length)) {
+    renderFlareChart();
+    return;
+  }
+  state.xray.loading = true;
+  state.xray.error = null;
+  renderFlareChart();
+  try {
+    const r = await fetch(NOAA_XRAY_API, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    if (!Array.isArray(rows)) throw new Error('Formato NOAA non valido');
+    const byEnergy = new Map();
+    for (const row of rows) {
+      const point = xrayPoint(row);
+      if (!point) continue;
+      const energy = String(row.energy || '');
+      if (!byEnergy.has(energy)) byEnergy.set(energy, []);
+      byEnergy.get(energy).push(point);
+    }
+    state.xray.short = (byEnergy.get('0.05-0.4nm') || []).sort((a, b) => a.time - b.time);
+    state.xray.long = (byEnergy.get('0.1-0.8nm') || []).sort((a, b) => a.time - b.time);
+    if (!state.xray.long.length && !state.xray.short.length) throw new Error('Dati GOES assenti');
+    state.xray.loadedAt = Date.now();
+  } catch (err) {
+    state.xray.error = 'NOAA SWPC non raggiungibile o dati temporaneamente non interpretabili.';
+    console.error('Dati brillamenti NOAA GOES non disponibili:', err);
+  } finally {
+    state.xray.loading = false;
+    renderFlareChart();
+  }
+}
+
 function renderHistogram() {
   const box = $('histogram');
   box.innerHTML = '';
@@ -1510,6 +1645,19 @@ $('replay-slider').oninput = e => {
   render();
 };
 
+function toggleFlarePanel(open) {
+  const panel = $('flare-panel');
+  const show = open === undefined ? panel.hidden : open;
+  panel.hidden = !show;
+  $('btn-flares').setAttribute('aria-expanded', String(show));
+  if (show) {
+    toggleInfo(false);
+    loadXrayFlux();
+  }
+}
+$('btn-flares').onclick = () => toggleFlarePanel();
+$('flare-close').onclick = () => toggleFlarePanel(false);
+
 // Guida: il testo sta già nell'HTML (serve anche a motori di ricerca e IA,
 // che non eseguono JavaScript), qui si gestisce solo l'apertura.
 function toggleInfo(open) {
@@ -1518,6 +1666,7 @@ function toggleInfo(open) {
   info.hidden = !show;
   document.body.classList.toggle('info-open', show);
   $('btn-info').setAttribute('aria-expanded', String(show));
+  if (show) toggleFlarePanel(false);
   if (show) info.scrollTop = 0;
   syncAnimation();
 }
@@ -1546,7 +1695,12 @@ panel.addEventListener('click', (e) => {
   }
 });
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleInfo(false); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    toggleInfo(false);
+    toggleFlarePanel(false);
+  }
+});
 
 // Pausa rotazione durante l'interazione
 $('globe').addEventListener('pointerdown', () => { globe.controls().autoRotate = false; });
