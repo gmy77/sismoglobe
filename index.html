@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.9.3">
+<link rel="stylesheet" href="style.css?v=1.9.4">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -238,6 +238,11 @@
   <div id="panel-backdrop"></div>
 
   <div id="globe"></div>
+  <div id="globe-navigation" aria-label="Comandi del globo">
+    <span class="globe-mouse-help">Trascina: ruota · Shift + trascina: sposta · Rotella: zoom</span>
+    <span class="globe-touch-help">Un dito: ruota · Due dita: sposta e zoom</span>
+    <button id="globe-recenter" type="button" title="Ricentra il globo mantenendo lo zoom" aria-label="Ricentra il globo">Ricentra</button>
+  </div>
   <div id="map-view" hidden><canvas id="map-canvas" tabindex="0" aria-label="Mappa terremoti: trascina per spostare, usa più e meno per zoomare. I dettagli accessibili sono nella lista eventi."></canvas><div id="map-tools"><button id="map-in" aria-label="Ingrandisci mappa">+</button><button id="map-out" aria-label="Riduci mappa">−</button><button id="map-world">Mondo</button></div><span class="map-hint">Trascina · rotella / + − per zoom · clic su evento o paese</span></div>
 
   <section id="flare-panel" hidden aria-labelledby="flare-title">
@@ -378,6 +383,6 @@
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script src="explorer.js?v=1.9.0"></script>
-<script src="main.js?v=1.9.3"></script>
+<script src="main.js?v=1.9.4"></script>
 </body>
 </html>

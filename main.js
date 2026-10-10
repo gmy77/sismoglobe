@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.9.3';
+const APP_VERSION = 'v1.9.4';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const NOAA_XRAY_API = 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json';
@@ -341,6 +341,8 @@ speedUpRaycasting();
 
 globe.controls().autoRotate = true;
 globe.controls().autoRotateSpeed = 0.4;
+globe.controls().enablePan = true;
+globe.controls().screenSpacePanning = true;
 // altitude 2.2 lasciava il polo nord del globo dietro la topbar fissa in
 // alto: bisognava zoommare indietro a mano a ogni apertura. Con 2.6 il globo
 // parte un po' più piccolo ma tutto visibile sotto la barra.
@@ -538,9 +540,22 @@ fetch('https://cdn.jsdelivr.net/gh/fraxen/tectonicplates@master/GeoJSON/PB2002_b
 
 $('chk-plates').onchange = e => { if (plateMesh) plateMesh.visible = e.target.checked; flatMap.showPlates = e.target.checked; flatMap.schedule(); };
 
+function recenterGlobe() {
+  const controls = globe.controls();
+  if (!controls.target || controls.target.lengthSq() === 0) return;
+  // Translate both camera and target to preserve the current angle and zoom.
+  globe.camera().position.sub(controls.target);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+$('globe-recenter').onclick = recenterGlobe;
+
 function flyTo(d, altitude = 1.5) {
   if (state.view === '2d') flatMap.focus(d.lat, d.lng, Math.max(3, flatMap.view.zoom));
-  else globe.pointOfView({ lat: d.lat, lng: d.lng, altitude }, state.quality === 'light' ? 0 : 1200);
+  else {
+    recenterGlobe();
+    globe.pointOfView({ lat: d.lat, lng: d.lng, altitude }, state.quality === 'light' ? 0 : 1200);
+  }
 }
 
 // ---------- Fonti, viste e preferiti ----------
@@ -601,6 +616,8 @@ function setView(view) {
   const previous = state.view;
   state.view = view; hideCustomTip();
   $('globe').hidden = view !== '3d'; $('map-view').hidden = view !== '2d';
+  $('globe-navigation').hidden = view !== '3d';
+  recenterGlobe();
   $('view-3d').setAttribute('aria-pressed', String(view === '3d'));
   $('view-2d').setAttribute('aria-pressed', String(view === '2d'));
   $('chk-rotate').disabled = view === '2d';
@@ -649,7 +666,10 @@ $('sel-place').onchange = e => {
   if(!view)return;
   // A favorite frames an area; existing data filters remain explicit and unchanged.
   if(state.view==='2d')flatMap.focus(view.lat,view.lng,view.zoom);
-  else globe.pointOfView({lat:view.lat,lng:view.lng,altitude:Math.max(.15,2.6/view.zoom)},state.quality==='light'?0:900);
+  else {
+    recenterGlobe();
+    globe.pointOfView({lat:view.lat,lng:view.lng,altitude:Math.max(.15,2.6/view.zoom)},state.quality==='light'?0:900);
+  }
   $('chk-rotate').checked=false;globe.controls().autoRotate=false;
 };
 $('save-place').onclick = () => { $('favorite-form').hidden=false; $('favorite-name').focus(); };

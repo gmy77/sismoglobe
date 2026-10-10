@@ -144,6 +144,42 @@ html, body {
 /* ---------- Layout ---------- */
 main { height: 100%; }
 #globe { position: absolute; inset: 0; }
+#globe-navigation {
+  position: absolute;
+  bottom: 64px;
+  left: 344px;
+  right: 12px;
+  z-index: 16;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: center;
+  pointer-events: none;
+}
+#globe-navigation[hidden] { display: none; }
+#globe-recenter {
+  pointer-events: auto;
+  padding: 5px 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+#globe-recenter:hover, #globe-recenter:focus-visible { border-color: var(--accent); }
+.globe-touch-help { display: none; }
+@media (pointer: coarse) {
+  .globe-mouse-help { display: none; }
+  .globe-touch-help { display: inline; }
+}
+@media (max-width: 767px) {
+  #globe-navigation { left: 8px; right: 8px; bottom: 12px; }
+}
 
 #panel {
   position: fixed;
