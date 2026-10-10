@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.9.2">
+<link rel="stylesheet" href="style.css?v=1.9.3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -139,8 +139,10 @@
         <div class="stat"><span class="stat-val" id="st-hour">–</span><span class="stat-lab">ultima ora</span></div>
         <div class="stat"><span class="stat-val" id="st-max">–</span><span class="stat-lab">mag. max</span></div>
         <div class="stat"><span class="stat-val" id="st-energy">–</span><span class="stat-lab">energia 24h</span></div>
-        <div class="stat" id="st-kp-box" title="Indice geomagnetico Kp (NOAA SWPC), massimo dell'ultimo giorno disponibile — via sismo-fvg">
-          <span class="stat-val" id="st-kp">–</span><span class="stat-lab">Kp solare</span>
+        <div class="stat stat-kp" id="st-kp-box" title="Indice geomagnetico Kp (NOAA SWPC), massimo dell'ultimo giorno disponibile — via sismo-fvg">
+          <button id="btn-flares" class="stat-action" type="button" aria-expanded="false" aria-controls="flare-panel" title="Apri il grafico NOAA GOES dei brillamenti solari">
+            <span class="stat-val" id="st-kp">–</span><span class="stat-lab">Kp solare</span><span aria-hidden="true" class="stat-action-icon">▣</span>
+          </button>
         </div>
       </div>
 
@@ -237,6 +239,22 @@
 
   <div id="globe"></div>
   <div id="map-view" hidden><canvas id="map-canvas" tabindex="0" aria-label="Mappa terremoti: trascina per spostare, usa più e meno per zoomare. I dettagli accessibili sono nella lista eventi."></canvas><div id="map-tools"><button id="map-in" aria-label="Ingrandisci mappa">+</button><button id="map-out" aria-label="Riduci mappa">−</button><button id="map-world">Mondo</button></div><span class="map-hint">Trascina · rotella / + − per zoom · clic su evento o paese</span></div>
+
+  <section id="flare-panel" hidden aria-labelledby="flare-title">
+    <div class="flare-head">
+      <div>
+        <h2 id="flare-title">Brillamenti solari GOES</h2>
+        <p id="flare-summary">In attesa dei dati NOAA SWPC…</p>
+      </div>
+      <button id="flare-close" type="button" aria-label="Chiudi grafico brillamenti">✕</button>
+    </div>
+    <div id="flare-chart" role="img" aria-label="Grafico del flusso X-ray NOAA GOES nelle ultime 6 ore"></div>
+    <div class="flare-legend">
+      <span><i class="flare-dot flare-long"></i>0.1–0.8 nm</span>
+      <span><i class="flare-dot flare-short"></i>0.05–0.4 nm</span>
+      <span id="flare-updated">NOAA SWPC</span>
+    </div>
+  </section>
 
   <article id="info" hidden>
     <button id="info-close" type="button" aria-label="Chiudi la guida">✕</button>
@@ -360,6 +378,6 @@
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script src="explorer.js?v=1.9.0"></script>
-<script src="main.js?v=1.9.2"></script>
+<script src="main.js?v=1.9.3"></script>
 </body>
 </html>
