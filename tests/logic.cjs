@@ -46,7 +46,7 @@ function test(name,fn){fn();console.log('PASS',name);}
 function flushRaf(){const f=[...rafs.values()];rafs.clear();for(const cb of f)cb(now);}
 const fixture=Array.from({length:12000},(_,i)=>({id:'q'+i,lat:i%150-75,lng:i%360-180,mag:i%7,depth:10,time:Date.now()-i*1000,place:'Test '+i}));
 sandbox.fixture=fixture;
-test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.3');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.4');assert.equal(props.width,1056);assert.equal(props.height,800);});
 test('12000 events use merged geometry and at most six ring sources',()=>{run('state.quakes=fixture; state.monthQuakes=fixture; render()');assert.equal(props.pointsMerge,true);assert.equal(props.pointsData.length,12000);assert.ok(props.ringsData.length<=6);assert.equal(document.getElementById('quake-list').children.length,500);});
 test('2D suspends globe and does not rebuild its geometry',()=>{const updates=pointUpdates;run("setView('2d'); render()");flushRaf();assert.equal(paused,true);assert.equal(pointUpdates,updates);assert.equal(document.getElementById('map-view').hidden,false);assert.ok(run('flatMap.hits.length')>0);});
 test('2D shares magnitude filter and returns to 3D',()=>{run("state.minMag=5;render()");assert.equal(run('flatMap.quakes.every(q=>q.mag>=5)'),true);run("setView('3d')");assert.equal(paused,false);assert.equal(props.pointsData.every(q=>q.mag>=5),true);});
@@ -58,4 +58,14 @@ test('map zoom bounded, motion redraws coalesced and inactive map does no work',
 test('replay list throttled but paused frame stays accurate',()=>{now=2000;run('state.minMag=0;state.replay.active=true;state.replay.playing=true;state.replay.t=REPLAY_RANGE_MS;renderReplayFrame()');const first=document.getElementById('quake-list').firstChild;now=2200;run('renderReplayFrame()');assert.equal(document.getElementById('quake-list').firstChild,first);run('state.replay.playing=false;renderReplayFrame()');assert.notEqual(document.getElementById('quake-list').firstChild,first);});
 test('GOES flare panel renders cached xray series without touching globe data',()=>{const updates=pointUpdates;run("state.xray={loading:false,error:null,loadedAt:Date.now(),short:[{time:0,flux:2e-8,satellite:18},{time:60000,flux:3e-8,satellite:18}],long:[{time:0,flux:1e-6,satellite:18},{time:60000,flux:2.4e-5,satellite:18}]};renderFlareChart()");assert.match(document.getElementById('flare-summary').textContent,/picco 6h M2.4/);assert.ok(document.querySelector('.flare-path-long')?.getAttribute('d').startsWith('M'));assert.equal(pointUpdates,updates);});
 test('quake detail toast includes estimated waveform',()=>{run('showToast(fixture[0], false)');const wave=document.querySelector('.toast .waveform');assert.ok(wave);assert.match(wave.textContent,/non è un sismogramma/i);assert.ok(wave.querySelector('.waveform-line')?.getAttribute('d').startsWith('M'));});
-console.log('12 logic tests passed. Browser/WebGL verification remains required.');
+test('recenter preserves camera offset and flight clears panning without rebuilding geometry',()=>{
+  const updates=pointUpdates;
+  const vector=(x,y,z)=>({x,y,z,lengthSq(){return this.x*this.x+this.y*this.y+this.z*this.z;},set(x,y,z){Object.assign(this,{x,y,z});},sub(v){this.x-=v.x;this.y-=v.y;this.z-=v.z;}});
+  controls.target=vector(12,-8,4);controls.update=()=>{};
+  props.camera={position:vector(112,32,204)};
+  document.getElementById('globe-recenter').onclick();
+  assert.equal(controls.target.lengthSq(),0);assert.equal(props.camera.position.x,100);assert.equal(props.camera.position.y,40);assert.equal(props.camera.position.z,200);
+  controls.target.set(8,5,2);run("state.view='3d';flyTo({lat:42,lng:13},1.6)");
+  assert.equal(controls.target.lengthSq(),0);assert.equal(pov.lat,42);assert.equal(pov.lng,13);assert.equal(pointUpdates,updates);
+});
+console.log('13 logic tests passed. Browser/WebGL verification remains required.');
