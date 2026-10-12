@@ -46,7 +46,8 @@ function test(name,fn){fn();console.log('PASS',name);}
 function flushRaf(){const f=[...rafs.values()];rafs.clear();for(const cb of f)cb(now);}
 const fixture=Array.from({length:12000},(_,i)=>({id:'q'+i,lat:i%150-75,lng:i%360-180,mag:i%7,depth:10,time:Date.now()-i*1000,place:'Test '+i}));
 sandbox.fixture=fixture;
-test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.5');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.6');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('source description starts collapsed and toggles on click',()=>{const box=document.getElementById('source-box');const toggle=document.getElementById('source-toggle');assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');toggle.click();assert.equal(box.classList.contains('collapsed'),false);assert.equal(toggle.getAttribute('aria-expanded'),'true');toggle.click();assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');});
 test('12000 events use merged geometry and at most six ring sources',()=>{run('state.quakes=fixture; state.monthQuakes=fixture; render()');assert.equal(props.pointsMerge,true);assert.equal(props.pointsData.length,12000);assert.ok(props.ringsData.length<=6);assert.equal(document.getElementById('quake-list').children.length,500);});
 test('2D suspends globe and does not rebuild its geometry',()=>{const updates=pointUpdates;run("setView('2d'); render()");flushRaf();assert.equal(paused,true);assert.equal(pointUpdates,updates);assert.equal(document.getElementById('map-view').hidden,false);assert.ok(run('flatMap.hits.length')>0);});
 test('2D shares magnitude filter and returns to 3D',()=>{run("state.minMag=5;render()");assert.equal(run('flatMap.quakes.every(q=>q.mag>=5)'),true);run("setView('3d')");assert.equal(paused,false);assert.equal(props.pointsData.every(q=>q.mag>=5),true);});
@@ -68,4 +69,4 @@ test('recenter preserves camera offset and flight clears panning without rebuild
   controls.target.set(8,5,2);run("state.view='3d';flyTo({lat:42,lng:13},1.6)");
   assert.equal(controls.target.lengthSq(),0);assert.equal(pov.lat,42);assert.equal(pov.lng,13);assert.equal(pointUpdates,updates);
 });
-console.log('13 logic tests passed. Browser/WebGL verification remains required.');
+console.log('14 logic tests passed. Browser/WebGL verification remains required.');
