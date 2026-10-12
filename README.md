@@ -38,8 +38,12 @@ poi aprire <http://localhost:8642>.
 
 - Terremoti: [USGS Earthquake Hazards Program – GeoJSON feeds](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php)
 - Terremoti minori: [EMSC – FDSN event web service](https://www.seismicportal.eu/fdsn-wsevent.html)
+- Micro-sismicita FVG/Campi Flegrei: [INGV diretto](https://webservices.ingv.it/fdsnws/event/1/), M0.3+, ultimi 30 giorni, ogni 10 minuti.
+- Indice Kp: [NOAA SWPC diretto](https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json), massimo e media dell'ultimo giorno UTC disponibile, ogni 10 minuti.
 - Confini: [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth 110m)
 - Rendering: [globe.gl](https://globe.gl) (three.js)
+
+Diagnostica delle fonti e log Cloudflare: [SOURCE-OPERATIONS.md](SOURCE-OPERATIONS.md).
 
 ## Anteprima v1.9.0 (da verificare nel browser)
 
