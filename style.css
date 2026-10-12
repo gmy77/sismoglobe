@@ -145,19 +145,20 @@ html, body {
 main { height: 100%; }
 #globe { position: absolute; inset: 0; }
 #globe-navigation {
-  position: absolute;
-  bottom: 64px;
-  left: 344px;
-  right: 12px;
+  position: fixed;
+  bottom: 10px;
+  left: 14px;
+  width: 480px;
+  max-width: calc(100vw - 28px);
   z-index: 16;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   color: var(--text-dim);
   font-size: 11px;
-  text-align: center;
+  text-align: left;
   pointer-events: none;
 }
 #globe-navigation[hidden] { display: none; }
@@ -178,14 +179,14 @@ main { height: 100%; }
   .globe-touch-help { display: inline; }
 }
 @media (max-width: 767px) {
-  #globe-navigation { left: 8px; right: 8px; bottom: 12px; }
+  #globe-navigation { left: 8px; width: calc(100vw - 16px); max-width: none; bottom: 12px; }
 }
 
 #panel {
   position: fixed;
   top: calc(var(--topbar-h) + 12px);
   left: 12px;
-  bottom: 12px;
+  bottom: 48px;
   width: 320px;
   z-index: 15;
   display: flex;
@@ -644,6 +645,7 @@ body.info-open #footer { display: none; }   /* la guida ha già i suoi link in f
 
 /* ---------- Footer ---------- */
 #footer {
+  max-width: calc(100vw - 520px);
   position: fixed;
   bottom: 10px;
   right: 14px;
