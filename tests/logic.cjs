@@ -46,7 +46,7 @@ function test(name,fn){fn();console.log('PASS',name);}
 function flushRaf(){const f=[...rafs.values()];rafs.clear();for(const cb of f)cb(now);}
 const fixture=Array.from({length:12000},(_,i)=>({id:'q'+i,lat:i%150-75,lng:i%360-180,mag:i%7,depth:10,time:Date.now()-i*1000,place:'Test '+i}));
 sandbox.fixture=fixture;
-test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.6');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.7');assert.equal(props.width,1056);assert.equal(props.height,800);});
 test('source description starts collapsed and toggles on click',()=>{const box=document.getElementById('source-box');const toggle=document.getElementById('source-toggle');assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');toggle.click();assert.equal(box.classList.contains('collapsed'),false);assert.equal(toggle.getAttribute('aria-expanded'),'true');toggle.click();assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');});
 test('12000 events use merged geometry and at most six ring sources',()=>{run('state.quakes=fixture; state.monthQuakes=fixture; render()');assert.equal(props.pointsMerge,true);assert.equal(props.pointsData.length,12000);assert.ok(props.ringsData.length<=6);assert.equal(document.getElementById('quake-list').children.length,500);});
 test('2D suspends globe and does not rebuild its geometry',()=>{const updates=pointUpdates;run("setView('2d'); render()");flushRaf();assert.equal(paused,true);assert.equal(pointUpdates,updates);assert.equal(document.getElementById('map-view').hidden,false);assert.ok(run('flatMap.hits.length')>0);});
@@ -69,4 +69,17 @@ test('recenter preserves camera offset and flight clears panning without rebuild
   controls.target.set(8,5,2);run("state.view='3d';flyTo({lat:42,lng:13},1.6)");
   assert.equal(controls.target.lengthSq(),0);assert.equal(pov.lat,42);assert.equal(pov.lng,13);assert.equal(pointUpdates,updates);
 });
-console.log('14 logic tests passed. Browser/WebGL verification remains required.');
+test('INGV direct GeoJSON preserves identity, depth and UTC microseconds',()=>{sandbox.ingvFixture={type:'FeatureCollection',features:[{properties:{eventId:42,time:'2026-10-12T09:12:13.123456',mag:0.3,place:'Test FVG'},geometry:{coordinates:[13,46,8.5]}},{properties:{eventId:43,time:'bad',mag:1},geometry:{coordinates:[13,46,4]}}]};const q=run('parseIngvGeojson(ingvFixture)');assert.equal(q.length,1);assert.equal(q[0].id,'ingv-42');assert.equal(q[0].depth,8.5);assert.equal(q[0].time,Date.parse('2026-10-12T09:12:13.123Z'));assert.throws(()=>run('parseIngvGeojson({})'));assert.equal(run('parseIngvGeojson({type:"FeatureCollection",features:[]}).length'),0);});
+test('NOAA Kp supports object and table feeds, zero, daily aggregation and stale rejection',()=>{const time=new Date().toISOString().slice(0,10)+'T00:00:00';sandbox.kpFixture=[{time_tag:new Date().toISOString(),Kp:0},{time_tag:new Date().toISOString(),Kp:3},{time_tag:time,Kp:null}];const k=run('parseNoaaKp(kpFixture)');assert.equal(k.max,3);assert.equal(k.avg,1.5);sandbox.kpTable=[['time_tag','Kp'],[new Date().toISOString(), '2.33']];assert.equal(run('parseNoaaKp(kpTable).max'),2.33);assert.throws(()=>run('parseNoaaKp([{time_tag:"2020-01-01T00:00:00",Kp:2}])'));assert.throws(()=>run('parseNoaaKp([{time_tag:new Date().toISOString(),Kp:null}])'));});
+(async()=>{
+  sandbox.fetch=async url=>({ok:true,status:200,json:async()=>String(url).includes('noaa.gov')?sandbox.kpFixture:sandbox.ingvFixture});
+  await run('loadRegionalSources()');
+  assert.equal(run('state.ingvQuakes.length'),1);assert.equal(run('state.kp.max'),3);
+  const at=run('sourceHealth.ingv.at');
+  sandbox.fetch=async url=>{if(String(url).includes('minlatitude=45.5'))throw new Error('FVG unavailable');return String(url).includes('noaa.gov')?{ok:false,status:503}:{ok:true,status:204};};
+  await run('loadRegionalSources()');
+  assert.equal(run('state.ingvQuakes.length'),1);assert.equal(run('state.kp.max'),3);assert.equal(run('sourceHealth.ingv.at'),at);
+  assert.equal(run('sourceHealth.ingv.status'),'error');
+  console.log('PASS direct loading retains cached data on partial INGV and NOAA failure');
+  console.log('17 logic tests passed. Browser/WebGL verification remains required.');
+})().catch(err=>{console.error(err);process.exitCode=1;});

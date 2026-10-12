@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS) */
 'use strict';
 
-const APP_VERSION = 'v1.9.6';
+const APP_VERSION = 'v1.9.7';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const NOAA_XRAY_API = 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json';
@@ -17,13 +17,15 @@ const FLY_MIN_MAG = 4.5; // soglia magnitudo per il volo automatico "vola sui nu
 
 // USGS registra in modo completo solo sopra M4-4.5 fuori dagli USA: i
 // micro-sismi del Friuli Venezia Giulia (M0.3-3) non compaiono quasi mai.
-// Il worker sismo-fvg (progetto ECHO, gmy77/sismo-echo) li ingerisce da INGV
-// ogni volta che viene aggiornato (cron 4x/giorno + "Aggiorna ora" manuale),
-// li salva in D1 e li espone su questo endpoint pubblico (CORS aperto).
-const SISMOFVG_BASE = 'https://sismo-fvg.gimmy077.workers.dev';
-const INGV_API = SISMOFVG_BASE + '/api/events';
-const SOLAR_API = SISMOFVG_BASE + '/api/solar'; // stesso worker: indice Kp giornaliero (NOAA SWPC), utile per l'ipotesi di correlazione sismo/attività solare
-const INGV_POLL_MS = 10 * 60_000; // stesso ritmo del refresh mensile: il worker non aggiorna più spesso di così
+// Stesse aree di ECHO, lette direttamente dalla fonte ufficiale.
+const INGV_API = 'https://webservices.ingv.it/fdsnws/event/1/query';
+const SOLAR_API = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json';
+const INGV_AREAS = [
+  { name: 'FVG', minlatitude: 45.5, maxlatitude: 46.8, minlongitude: 12.4, maxlongitude: 14.1 },
+  { name: 'Campi Flegrei', minlatitude: 40.4, maxlatitude: 41.1, minlongitude: 13.7, maxlongitude: 14.8 },
+];
+const ingvAreaCache = [[], []];
+const INGV_POLL_MS = 10 * 60_000;
 const INGV_MIN_MAG = 0.3;
 // Catalogo EMSC (FDSN, CORS aperto): USGS fuori dagli USA è completo solo
 // sopra M4-4.5, EMSC aggiunge ~170 eventi M2.5+ al giorno che USGS non ha
@@ -49,10 +51,10 @@ const state = {
   replay: { active: false, playing: false, t: 0 }, // t = ms trascorsi dall'inizio della finestra di 30gg
   emscLive: true,
   emscPending: [], // eventi EMSC non ancora confermati dal feed USGS
-  ingvQuakes: [],  // cache degli eventi FVG/CF da sismo-fvg (fonte INGV), indipendente dalla finestra
+  ingvQuakes: [],  // cache degli eventi INGV FVG/CF, indipendente dalla finestra
   emscQuakes: [],  // cache 30 giorni del catalogo EMSC (fonte 'emsc-cat'), indipendente dalla finestra
   live: { ok: null, at: null }, // esito (true/false, null = in attesa) e Date dell'ultimo poll USGS
-  kp: null,        // { day, max, avg } ultimo giorno disponibile del feed solare NOAA (via sismo-fvg), o null se non ancora caricato
+  kp: null,        // { day, max, avg } ultimo giorno disponibile del feed NOAA
   xray: { loading: false, error: null, loadedAt: 0, short: [], long: [] }, // flusso GOES X-ray NOAA SWPC, caricato a richiesta
 };
 
@@ -561,8 +563,8 @@ function flyTo(d, altitude = 1.5) {
 // ---------- Fonti, viste e preferiti ----------
 const sourceHealth = Object.fromEntries([
   ['usgs', 'USGS · finestra', POLL_MS], ['month', 'USGS · storico', MONTH_POLL_MS],
-  ['emsc', 'EMSC · catalogo', EMSC_POLL_MS], ['ingv', 'INGV · ECHO', INGV_POLL_MS],
-  ['solar', 'Kp · ECHO', INGV_POLL_MS], ['stream', 'EMSC · diretta', 0],
+  ['emsc', 'EMSC · catalogo', EMSC_POLL_MS], ['ingv', 'INGV · diretto', INGV_POLL_MS],
+  ['solar', 'Kp · NOAA diretto', INGV_POLL_MS], ['stream', 'EMSC · diretta', 0],
 ].map(([id, label, interval]) => [id, { label, interval, status: 'waiting', at: null }]));
 function setSource(id, status) {
   const entry = sourceHealth[id]; entry.status = status;
@@ -937,7 +939,7 @@ function renderList(vis) {
     const srcTag = isEmsc
       ? ' <span class="q-pending" title="Notifica EMSC in diretta, in attesa del feed USGS o del catalogo EMSC">⚡</span>'
       : isIngv
-        ? ' <span class="q-src" title="Fonte: INGV via sismo-fvg.gimmycloud.net — sismicità regionale FVG/Campi Flegrei, non presente sul feed USGS">INGV</span>'
+        ? ' <span class="q-src" title="Fonte: INGV diretto — sismicità regionale FVG/Campi Flegrei">INGV</span>'
         : q.source === 'emsc-cat'
           ? ' <span class="q-src" title="Fonte: catalogo EMSC (European-Mediterranean Seismological Centre) — evento non presente sul feed USGS">EMSC</span>'
           : '';
@@ -978,7 +980,7 @@ function renderStats() {
   if (state.kp) {
     kpEl.textContent = state.kp.max.toFixed(1);
     kpEl.style.color = kpColor(state.kp.max);
-    $('st-kp-box').title = `Indice geomagnetico Kp (NOAA SWPC) — massimo del ${state.kp.day}: ${state.kp.max.toFixed(1)}, media ${state.kp.avg.toFixed(1)}. Via sismo-fvg.`;
+    $('st-kp-box').title = `Indice geomagnetico Kp (NOAA SWPC diretto) — massimo del ${state.kp.day} UTC: ${state.kp.max.toFixed(1)}, media ${state.kp.avg.toFixed(1)}. Ultimo campione: ${new Date(state.kp.time).toISOString()}.`;
   } else {
     kpEl.textContent = '–';
     kpEl.style.color = '';
@@ -1385,11 +1387,11 @@ function withExtraSources(base, windowMs) {
   return [...base, ...ingv, ...emsc].sort((a, b) => b.time - a.time);
 }
 
-// L'endpoint sismo-fvg salva l'orario INGV con microsecondi ("...54.320000",
+// INGV restituisce orari con microsecondi ("...54.320000",
 // senza 'Z'): Date.parse lo ignorerebbe silenziosamente. Troncato a millisecondi
 // e con 'Z' esplicito, è un ISO valido (i dati INGV sono in UTC).
 function parseIngvTime(s) {
-  return Date.parse(String(s).slice(0, 23) + 'Z');
+  return Date.parse(String(s).replace(/Z$/i, '').slice(0, 23) + 'Z');
 }
 
 // Rimescola gli eventi INGV ed EMSC nella finestra corrente e nel mese, senza
@@ -1410,55 +1412,66 @@ function mergeExtrasIntoState() {
   state.quakes = withExtraSources(strip(state.quakes), WINDOW_MS[state.window]);
 }
 
-// Carica in un colpo solo i due dataset esposti da sismo-fvg: eventi INGV
-// (FVG/Campi Flegrei) e indice geomagnetico Kp. Le due fetch sono indipendenti
-// (Promise.allSettled): se una delle due fallisce l'altra resta comunque utile,
-// invece di perdere tutto per un problema isolato a un solo endpoint.
-async function loadSismoFvg() {
+function parseIngvGeojson(data) {
+  if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) throw new Error('Catalogo INGV non valido');
+  return data.features.map(f => {
+    const p = f.properties || {}, c = f.geometry?.coordinates || [];
+    if (p.eventId == null || p.mag == null || c.length < 3) return null;
+    return { id: 'ingv-' + p.eventId, lat: Number(c[1]), lng: Number(c[0]), depth: Number(c[2]),
+      mag: Number(p.mag), place: String(p.place || 'N/D'), time: parseIngvTime(p.time), tsunami: false, source: 'ingv' };
+  }).filter(q => q && q.time && [q.lat, q.lng, q.depth, q.mag].every(Number.isFinite)
+    && Math.abs(q.lat) <= 90 && Math.abs(q.lng) <= 180);
+}
+
+function parseNoaaKp(rows) {
+  if (!Array.isArray(rows)) throw new Error('Dati Kp non validi');
+  const table = Array.isArray(rows[0]);
+  const ti = table ? rows[0].indexOf('time_tag') : -1;
+  const ki = table ? rows[0].indexOf('Kp') : -1;
+  const samples = (table ? rows.slice(1) : rows).map(r => {
+    const raw = table ? r[ki] : r.Kp;
+    return { time: parseIngvTime(table ? r[ti] : r.time_tag), kp: raw == null || raw === '' ? NaN : Number(raw) };
+  }).filter(r => Number.isFinite(r.time) && r.time > 0 && Number.isFinite(r.kp) && r.kp >= 0 && r.kp <= 9);
+  if (!samples.length) throw new Error('Dati Kp assenti');
+  const time = Math.max(...samples.map(r => r.time));
+  if (Date.now() - time > 12 * 3600_000 || time > Date.now() + 3600_000) throw new Error('Dati Kp non aggiornati');
+  const day = new Date(time).toISOString().slice(0, 10);
+  const values = samples.filter(r => new Date(r.time).toISOString().slice(0, 10) === day).map(r => r.kp);
+  return { day, time, max: Math.max(...values), avg: values.reduce((a, b) => a + b, 0) / values.length };
+}
+
+async function fetchIngvArea(area) {
+  const { name, ...bounds } = area;
+  const end = new Date();
+  const params = new URLSearchParams({ format: 'geojson', starttime: new Date(end - REPLAY_RANGE_MS).toISOString().slice(0, 19),
+    endtime: end.toISOString().slice(0, 19), minmagnitude: String(INGV_MIN_MAG), orderby: 'time', ...bounds });
+  const r = await fetch(`${INGV_API}?${params}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+  if (r.status === 204) return [];
+  if (!r.ok) throw new Error(`INGV ${name}: HTTP ${r.status}`);
+  return parseIngvGeojson(await r.json());
+}
+
+async function loadRegionalSources() {
   setSource('ingv', 'loading'); setSource('solar', 'loading');
-  const [evRes, solRes] = await Promise.allSettled([
-    fetch(`${INGV_API}?giorni=30&mag=${INGV_MIN_MAG}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) }),
-    fetch(SOLAR_API, { cache: 'no-store', signal: AbortSignal.timeout(20000) }),
-  ]);
-
-  if (evRes.status === 'fulfilled' && evRes.value.ok) {
+  const solar = (async () => {
     try {
-      const data = await evRes.value.json();
-      if (!Array.isArray(data.events)) throw new Error('Catalogo INGV non valido');
-      state.ingvQuakes = data.events
-        .map(e => ({
-          id: 'ingv-' + e.event_id,
-          lat: e.latitudine,
-          lng: e.longitudine,
-          depth: e.profondita,
-          mag: e.magnitudine,
-          place: e.localita,
-          time: parseIngvTime(e.data_ora),
-          tsunami: false,
-          source: 'ingv',
-        }))
-        .filter(q => q.time); // scarta eventuali orari non interpretabili
-      mergeExtrasIntoState(); setSource('ingv', 'ok');
-    } catch (err) { setSource('ingv', 'error'); console.error('Eventi INGV (sismo-fvg) non interpretabili:', err); }
-  } else {
-    setSource('ingv', 'error');
-    console.error('Eventi INGV (sismo-fvg) non raggiungibili:', evRes.reason || evRes.value?.status);
+      const r = await fetch(SOLAR_API, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+      if (!r.ok) throw new Error(`NOAA HTTP ${r.status}`);
+      state.kp = parseNoaaKp(await r.json());
+      setSource('solar', 'ok'); renderStats();
+    } catch (err) { setSource('solar', 'error'); console.error('Kp NOAA diretto:', err); }
+  })();
+  const areas = await Promise.allSettled(INGV_AREAS.map(fetchIngvArea));
+  areas.forEach((r, i) => {
+    if (r.status === 'fulfilled') ingvAreaCache[i] = r.value;
+    else console.error(`INGV ${INGV_AREAS[i].name}:`, r.reason);
+  });
+  if (areas.some(r => r.status === 'fulfilled')) {
+    state.ingvQuakes = [...new Map(ingvAreaCache.flat().map(q => [q.id, q])).values()];
+    mergeExtrasIntoState();
   }
-
-  if (solRes.status === 'fulfilled' && solRes.value.ok) {
-    try {
-      const days = await solRes.value.json();
-      if (Array.isArray(days) && days.length) {
-        const latest = days[0]; // query ordina già DESC per giorno
-        state.kp = { day: latest.giorno, max: latest.kp_max, avg: latest.kp_avg };
-        setSource('solar', 'ok');
-      } else throw new Error('Dati solari assenti');
-    } catch (err) { setSource('solar', 'error'); console.error('Dati solari (sismo-fvg) non interpretabili:', err); }
-  } else {
-    setSource('solar', 'error');
-    console.error('Dati solari (sismo-fvg) non raggiungibili:', solRes.reason || solRes.value?.status);
-  }
-
+  setSource('ingv', areas.every(r => r.status === 'fulfilled') ? 'ok' : 'error');
+  await solar;
   render();
   renderHistogram();
   renderStats();
@@ -1764,17 +1777,17 @@ $('app-version').textContent = 'SismoGlobe ' + APP_VERSION;
   const sharedId = new URLSearchParams(location.search).get('id');
   await loadFeed();
   const monthLoaded = loadMonth();
-  const sismoFvgLoaded = loadSismoFvg();
+  const regionalSourcesLoaded = loadRegionalSources();
   const emscLoaded = loadEmscCatalog();
   $('loading').classList.add('done');
   setInterval(loadFeed, POLL_MS);
   setInterval(loadMonth, MONTH_POLL_MS);
-  setInterval(loadSismoFvg, INGV_POLL_MS);
+  setInterval(loadRegionalSources, INGV_POLL_MS);
   setInterval(loadEmscCatalog, EMSC_POLL_MS);
   connectEmsc();
   if (sharedId) {
     await monthLoaded;
-    await sismoFvgLoaded; // il link condiviso potrebbe puntare a un evento INGV
+    await regionalSourcesLoaded; // il link condiviso potrebbe puntare a un evento INGV
     await emscLoaded;     // ... o del catalogo EMSC
     openSharedQuake(sharedId);
   }
