@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SismoGlobe — Terremoti nel mondo in tempo reale su globo 3D</title>
-<meta name="description" content="Mappa dei terremoti di tutto il pianeta in tempo reale su un globo 3D interattivo: dati USGS aggiornati ogni minuto, cerchi proporzionali alla magnitudo, statistiche giornaliere ed energia sismica rilasciata.">
+<meta name="description" content="SismoGlobe mostra i terremoti nel mondo in tempo reale su un globo 3D interattivo, integrando dati USGS, EMSC e INGV con indice Kp e brillamenti solari NOAA.">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://sismo.gimmycloud.net/">
 <meta name="theme-color" content="#05070f">
 
@@ -13,23 +14,32 @@
 <meta property="og:site_name" content="SismoGlobe">
 <meta property="og:locale" content="it_IT">
 <meta property="og:title" content="SismoGlobe — Terremoti nel mondo in tempo reale su globo 3D">
-<meta property="og:description" content="Mappa dei terremoti di tutto il pianeta in tempo reale su un globo 3D interattivo: dati USGS aggiornati ogni minuto, cerchi proporzionali alla magnitudo, statistiche giornaliere ed energia sismica rilasciata.">
+<meta property="og:description" content="Terremoti nel mondo in tempo reale su un globo 3D interattivo, con dati USGS, EMSC, INGV e monitoraggio dell'attività solare NOAA.">
 <meta property="og:image" content="https://sismo.gimmycloud.net/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Globo terrestre 3D con i terremoti in tempo reale segnati da cerchi colorati">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="SismoGlobe — Terremoti nel mondo in tempo reale su globo 3D">
-<meta name="twitter:description" content="Terremoti di tutto il pianeta in tempo reale su globo 3D. Dati USGS aggiornati ogni minuto.">
+<meta name="twitter:description" content="Terremoti nel mondo in tempo reale su globo 3D, con dati USGS, EMSC, INGV e monitoraggio solare NOAA.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.9.7">
+<link rel="stylesheet" href="style.css?v=1.9.8">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://sismo.gimmycloud.net/#website",
+      "url": "https://sismo.gimmycloud.net/",
+      "name": "SismoGlobe",
+      "alternateName": ["Sismo Globe", "sismo.gimmycloud.net"],
+      "inLanguage": "it",
+      "description": "Monitoraggio sismico globale in tempo reale su un globo 3D interattivo."
+    },
     {
       "@type": "WebApplication",
       "@id": "https://sismo.gimmycloud.net/#app",
@@ -38,10 +48,13 @@
       "applicationCategory": "https://schema.org/BrowserApplication",
       "operatingSystem": "Qualsiasi browser con WebGL",
       "inLanguage": "it",
-      "description": "Applicazione web che visualizza i terremoti di tutto il pianeta in tempo reale su un globo terrestre 3D interattivo, con cerchi proporzionali alla magnitudo, istogramma degli eventi giornalieri e calcolo dell'energia sismica rilasciata.",
+      "description": "Applicazione web che visualizza i terremoti di tutto il pianeta in tempo reale su un globo terrestre 3D interattivo, integrando dati USGS, EMSC e INGV e dati di attività solare NOAA.",
+      "isPartOf": { "@id": "https://sismo.gimmycloud.net/#website" },
+      "image": "https://sismo.gimmycloud.net/og-image.png",
+      "dateModified": "2026-10-13",
       "featureList": [
         "Globo 3D interattivo con confini nazionali e placche tettoniche",
-        "Aggiornamento dei terremoti ogni 60 secondi dai feed USGS",
+        "Aggiornamento dei terremoti dai feed ufficiali USGS, EMSC e INGV",
         "Avviso immediato a ogni nuovo sisma con magnitudo, località e profondità",
         "Cerchi e onde animate proporzionali alla magnitudo, sollevati dal globo in base alla profondità dell'ipocentro",
         "Istogramma dei terremoti al giorno negli ultimi 30 giorni, filtrabile anche per paese con un clic sul globo",
@@ -52,20 +65,27 @@
       ],
       "isAccessibleForFree": true,
       "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
-      "license": "https://github.com/gmy77/sismoglobe",
+      "sameAs": "https://github.com/gmy77/sismoglobe",
       "author": { "@type": "Person", "name": "Gimmy", "url": "https://gimmycloud.net/" }
     },
     {
       "@type": "Dataset",
       "@id": "https://sismo.gimmycloud.net/#dataset",
-      "name": "Terremoti mondiali in tempo reale (USGS)",
-      "description": "Eventi sismici rilevati in tutto il mondo negli ultimi 30 giorni: magnitudo, coordinate, profondità e orario, aggiornati ogni minuto.",
+      "name": "Terremoti mondiali visualizzati da SismoGlobe",
+      "description": "Eventi sismici rilevati in tutto il mondo negli ultimi 30 giorni: magnitudo, coordinate, profondità, orario e fonte USGS, EMSC o INGV.",
       "inLanguage": "it",
       "spatialCoverage": "Mondo",
       "temporalCoverage": "P30D",
-      "isBasedOn": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
-      "creator": { "@type": "Organization", "name": "United States Geological Survey", "url": "https://www.usgs.gov/" },
-      "license": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+      "isBasedOn": [
+        "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
+        "https://www.emsc-csem.org/",
+        "https://terremoti.ingv.it/"
+      ],
+      "creator": [
+        { "@type": "Organization", "name": "United States Geological Survey", "url": "https://www.usgs.gov/" },
+        { "@type": "Organization", "name": "European-Mediterranean Seismological Centre", "url": "https://www.emsc-csem.org/" },
+        { "@type": "Organization", "name": "Istituto Nazionale di Geofisica e Vulcanologia", "url": "https://www.ingv.it/" }
+      ],
       "isAccessibleForFree": true
     },
     {
@@ -75,7 +95,7 @@
         {
           "@type": "Question",
           "name": "Da dove arrivano i dati sui terremoti?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Dai feed pubblici GeoJSON dello United States Geological Survey (USGS), che raccoglie le rilevazioni delle reti sismiche di tutto il mondo. SismoGlobe li interroga ogni 60 secondi." }
+          "acceptedAnswer": { "@type": "Answer", "text": "Dai feed pubblici di USGS, EMSC e INGV. SismoGlobe integra le fonti mantenendo visibile la provenienza dei dati e conserva temporaneamente gli ultimi dati validi se una fonte non risponde." }
         },
         {
           "@type": "Question",
@@ -383,6 +403,6 @@
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script src="explorer.js?v=1.9.0"></script>
-<script src="main.js?v=1.9.7"></script>
+<script src="main.js?v=1.9.8"></script>
 </body>
 </html>
