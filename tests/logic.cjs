@@ -46,7 +46,8 @@ function test(name,fn){fn();console.log('PASS',name);}
 function flushRaf(){const f=[...rafs.values()];rafs.clear();for(const cb of f)cb(now);}
 const fixture=Array.from({length:12000},(_,i)=>({id:'q'+i,lat:i%150-75,lng:i%360-180,mag:i%7,depth:10,time:Date.now()-i*1000,place:'Test '+i}));
 sandbox.fixture=fixture;
-test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.7');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.8');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('SEO metadata identifies SismoGlobe and all primary data sources',()=>{const graph=JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'];const website=graph.find(item=>item['@type']==='WebSite');const dataset=graph.find(item=>item['@type']==='Dataset');assert.equal(document.querySelector('meta[name="robots"]').content,'index, follow, max-image-preview:large');assert.equal(website.name,'SismoGlobe');assert.deepEqual(website.alternateName,['Sismo Globe','sismo.gimmycloud.net']);assert.match(dataset.description,/USGS, EMSC o INGV/);assert.equal(dataset.creator.length,3);assert.match(fs.readFileSync('sitemap.xml','utf8'),/<lastmod>2026-10-13<\/lastmod>/);});
 test('source description starts collapsed and toggles on click',()=>{const box=document.getElementById('source-box');const toggle=document.getElementById('source-toggle');assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');toggle.click();assert.equal(box.classList.contains('collapsed'),false);assert.equal(toggle.getAttribute('aria-expanded'),'true');toggle.click();assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');});
 test('12000 events use merged geometry and at most six ring sources',()=>{run('state.quakes=fixture; state.monthQuakes=fixture; render()');assert.equal(props.pointsMerge,true);assert.equal(props.pointsData.length,12000);assert.ok(props.ringsData.length<=6);assert.equal(document.getElementById('quake-list').children.length,500);});
 test('2D suspends globe and does not rebuild its geometry',()=>{const updates=pointUpdates;run("setView('2d'); render()");flushRaf();assert.equal(paused,true);assert.equal(pointUpdates,updates);assert.equal(document.getElementById('map-view').hidden,false);assert.ok(run('flatMap.hits.length')>0);});
@@ -81,5 +82,5 @@ test('NOAA Kp supports object and table feeds, zero, daily aggregation and stale
   assert.equal(run('state.ingvQuakes.length'),1);assert.equal(run('state.kp.max'),3);assert.equal(run('sourceHealth.ingv.at'),at);
   assert.equal(run('sourceHealth.ingv.status'),'error');
   console.log('PASS direct loading retains cached data on partial INGV and NOAA failure');
-  console.log('17 logic tests passed. Browser/WebGL verification remains required.');
+  console.log('18 logic tests passed. Browser/WebGL verification remains required.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
