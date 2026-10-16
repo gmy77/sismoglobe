@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS, EMSC e INGV) */
 'use strict';
 
-const APP_VERSION = 'v1.9.8';
+const APP_VERSION = 'v1.9.9';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const NOAA_XRAY_API = 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json';
@@ -219,6 +219,12 @@ function quakeFlag(q) {
   return null;
 }
 
+function quakeSourceLabel(q) {
+  if (q?.source === 'ingv') return 'INGV';
+  if (q?.source === 'emsc' || q?.source === 'emsc-cat') return 'EMSC';
+  return 'USGS';
+}
+
 function parseFeed(geojson) {
   return geojson.features
     .filter(f => f.geometry && f.properties.mag != null)
@@ -270,7 +276,8 @@ const globe = Globe({ rendererConfig: { antialias: true, powerPreference: 'high-
     <div class="globe-tip">
       <b style="color:${magColor(d.mag)}">M ${d.mag.toFixed(1)}</b> — ${d.place}<br>
       ${fmtTime(d.time)} (${timeAgo(d.time)})<br>
-      Profondità: ${fmtDepth(d.depth)} <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}${flag ? `<br><span style="color:${flag.color}">${flag.icon} ${flag.label}</span> <span class="tip-hint">(${flag.detail})</span>` : ''}
+      Profondità: ${fmtDepth(d.depth)} <span class="tip-hint">(più il punto è sollevato, più è superficiale)</span><br>
+      Fonte: <span class="q-src">${quakeSourceLabel(d)}</span>${d.tsunami ? '<br>⚠️ Allerta tsunami' : ''}${flag ? `<br><span style="color:${flag.color}">${flag.icon} ${flag.label}</span> <span class="tip-hint">(${flag.detail})</span>` : ''}
     </div>`;
   })
   .onPointClick(d => { flyTo(d, 1.2); showToast(d, false); })
@@ -831,7 +838,8 @@ function showCustomTip(q, x, y) {
   customTip.innerHTML = `
     <b style="color:${magColor(q.mag)}">M ${q.mag.toFixed(1)}</b> — ${q.place}<br>
     ${fmtTime(q.time)} (${timeAgo(q.time)})<br>
-    Profondità: ${fmtDepth(q.depth)}${q.tsunami ? '<br>⚠️ Allerta tsunami' : ''}`;
+    Profondità: ${fmtDepth(q.depth)}<br>
+    Fonte: <span class="q-src">${quakeSourceLabel(q)}</span>${q.tsunami ? '<br>⚠️ Allerta tsunami' : ''}`;
   customTip.style.display = 'block';
   // si sposta a sinistra del cursore se altrimenti uscirebbe dallo schermo
   const w = customTip.offsetWidth;

@@ -1,12 +1,12 @@
 # TODO SismoGlobe
 
-Idee e controlli per le prossime sessioni. Stato di partenza: **v1.8.6** (2026-10-03).
+Idee e controlli per le prossime sessioni. Stato aggiornato: **v1.9.9** (2026-10-16).
 
 ## Da fare
 
-- [ ] **Fonte nel tooltip del globo** — passando il mouse su un punto mostrare se l'evento è USGS, EMSC o
+- [x] **Fonte nel tooltip del globo** — passando il mouse su un punto mostrare se l'evento è USGS, EMSC o
   INGV, come già fanno le etichette `.q-src` nella lista. Il tooltip è in `pointLabel` (main.js, setup del
-  globo) e, con i punti fusi delle viste 7g/30g, nel tooltip manuale `customTip`: vanno aggiornati entrambi.
+  globo) e, con i punti fusi delle viste 7g/30g, nel tooltip manuale `customTip`: aggiornati entrambi in v1.9.9.
 
 - [ ] **Doppioni USGS/EMSC nelle sequenze fitte** — nello sciame in Kamchatka di inizio ottobre 2026 alcune
   scosse compaiono due volte, perché USGS ed EMSC ne stimano la magnitudo con 0.5 o più di differenza e il
