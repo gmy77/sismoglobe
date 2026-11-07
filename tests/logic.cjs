@@ -46,8 +46,8 @@ function test(name,fn){fn();console.log('PASS',name);}
 function flushRaf(){const f=[...rafs.values()];rafs.clear();for(const cb of f)cb(now);}
 const fixture=Array.from({length:12000},(_,i)=>({id:'q'+i,lat:i%150-75,lng:i%360-180,mag:i%7,depth:10,time:Date.now()-i*1000,place:'Test '+i}));
 sandbox.fixture=fixture;
-test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.9.9');assert.equal(props.width,1056);assert.equal(props.height,800);});
-test('SEO metadata identifies SismoGlobe and all primary data sources',()=>{const graph=JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'];const website=graph.find(item=>item['@type']==='WebSite');const dataset=graph.find(item=>item['@type']==='Dataset');assert.equal(document.querySelector('meta[name="robots"]').content,'index, follow, max-image-preview:large');assert.equal(website.name,'SismoGlobe');assert.deepEqual(website.alternateName,['Sismo Globe','sismo.gimmycloud.net']);assert.match(dataset.description,/USGS, EMSC o INGV/);assert.equal(dataset.creator.length,3);assert.match(fs.readFileSync('sitemap.xml','utf8'),/<lastmod>2026-10-16<\/lastmod>/);});
+test('startup, version and canvas stays within visible viewport',()=>{assert.equal(document.getElementById('app-version').textContent,'SismoGlobe v1.10.0');assert.equal(props.width,1056);assert.equal(props.height,800);});
+test('SEO metadata identifies SismoGlobe and all primary data sources',()=>{const graph=JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'];const website=graph.find(item=>item['@type']==='WebSite');const dataset=graph.find(item=>item['@type']==='Dataset');assert.equal(document.querySelector('meta[name="robots"]').content,'index, follow, max-image-preview:large');assert.equal(website.name,'SismoGlobe');assert.deepEqual(website.alternateName,['Sismo Globe','sismo.gimmycloud.net']);assert.match(dataset.description,/USGS, EMSC o INGV/);assert.equal(dataset.creator.length,3);assert.match(fs.readFileSync('sitemap.xml','utf8'),/<lastmod>2026-11-07<\/lastmod>/);});
 test('source description starts collapsed and toggles on click',()=>{const box=document.getElementById('source-box');const toggle=document.getElementById('source-toggle');assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');toggle.click();assert.equal(box.classList.contains('collapsed'),false);assert.equal(toggle.getAttribute('aria-expanded'),'true');toggle.click();assert.equal(box.classList.contains('collapsed'),true);assert.equal(toggle.getAttribute('aria-expanded'),'false');});
 test('globe tooltips identify USGS, EMSC and INGV sources',()=>{assert.equal(run('quakeSourceLabel({})'),'USGS');assert.equal(run("quakeSourceLabel({source:'emsc'})"),'EMSC');assert.equal(run("quakeSourceLabel({source:'emsc-cat'})"),'EMSC');assert.equal(run("quakeSourceLabel({source:'ingv'})"),'INGV');const label=props.pointLabel({...fixture[0],source:'ingv'});assert.match(label,/Fonte:[\s\S]*INGV/);run("showCustomTip({...fixture[0],source:'emsc-cat'},10,10)");assert.match(document.getElementById('custom-tip').textContent,/Fonte:\s*EMSC/);});
 test('12000 events use merged geometry and at most six ring sources',()=>{run('state.quakes=fixture; state.monthQuakes=fixture; render()');assert.equal(props.pointsMerge,true);assert.equal(props.pointsData.length,12000);assert.ok(props.ringsData.length<=6);assert.equal(document.getElementById('quake-list').children.length,500);});
@@ -83,5 +83,16 @@ test('NOAA Kp supports object and table feeds, zero, daily aggregation and stale
   assert.equal(run('state.ingvQuakes.length'),1);assert.equal(run('state.kp.max'),3);assert.equal(run('sourceHealth.ingv.at'),at);
   assert.equal(run('sourceHealth.ingv.status'),'error');
   console.log('PASS direct loading retains cached data on partial INGV and NOAA failure');
-  console.log('19 logic tests passed. Browser/WebGL verification remains required.');
+  sandbox.fetch=async()=>({ok:true,status:200,json:async()=>({context:{s_scale:0,flare_class:'C1.5',wind_speed:512,kp_now:2.33},rows:[{time_tag:new Date(Date.now()-3600e3).toISOString(),proton_10mev:0.3,electron_2mev:150},{time_tag:new Date().toISOString(),proton_10mev:0.25,electron_2mev:240}]})});
+  await run('loadRadiation()');
+  assert.equal(document.getElementById('st-rad').textContent,'S0');
+  assert.match(document.getElementById('rad-values').textContent,/C1\.5/);
+  assert.match(document.getElementById('rad-spark').innerHTML,/<path/);
+  assert.equal(run('sourceHealth.rad.status'),'ok');
+  sandbox.fetch=async()=>({ok:false,status:503});
+  await run('loadRadiation()');
+  assert.equal(run('sourceHealth.rad.status'),'error');
+  assert.equal(document.querySelector('#st-rad-box a').getAttribute('href'),'radiazione.html');
+  console.log('PASS radiation card loads ECHO data, links the page and reports failures');
+  console.log('20 logic tests passed. Browser/WebGL verification remains required.');
 })().catch(err=>{console.error(err);process.exitCode=1;});

@@ -205,6 +205,21 @@ main { height: 100%; }
 #panel h2 { font-size: 13px; margin-bottom: 8px; letter-spacing: .5px; display: flex; align-items: center; gap: 8px; }
 #panel h2 small { color: var(--text-dim); font-weight: 400; }
 
+a.stat-action { text-decoration: none; }
+
+/* Scheda radiazione spaziale (dati dal rilevatore ECHO di sismo-fvg) */
+#rad-open { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--accent); text-decoration: none;
+            border: 1px solid rgba(90,130,255,.35); border-radius: 6px; padding: 1px 7px; }
+#rad-open:hover { background: rgba(90,130,255,.12); }
+.rad-values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rad-values > div { background: rgba(255,255,255,.03); border-radius: 8px; padding: 5px 6px; text-align: center; }
+.rad-values b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+.rad-values span { font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .4px; }
+.rad-wait { grid-column: 1 / -1; font-size: 12px; color: var(--text-dim); }
+#rad-spark { height: 46px; margin-top: 8px; }
+#rad-spark svg { width: 100%; height: 100%; display: block; }
+.rad-note { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; line-height: 1.4; }
+
 #source-box p { font-size: 12px; line-height: 1.5; color: var(--text-dim); margin: 0; }
 #source-box strong { color: var(--text); font-weight: 600; }
 

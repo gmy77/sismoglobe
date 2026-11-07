@@ -1,7 +1,7 @@
 /* SismoGlobe — monitoraggio terremoti in tempo reale (dati USGS, EMSC e INGV) */
 'use strict';
 
-const APP_VERSION = 'v1.9.9';
+const APP_VERSION = 'v1.10.0';
 const USGS = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/';
 const FEEDS = { day: 'all_day.geojson', week: 'all_week.geojson', month: 'all_month.geojson' };
 const NOAA_XRAY_API = 'https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json';
@@ -571,7 +571,7 @@ function flyTo(d, altitude = 1.5) {
 const sourceHealth = Object.fromEntries([
   ['usgs', 'USGS · finestra', POLL_MS], ['month', 'USGS · storico', MONTH_POLL_MS],
   ['emsc', 'EMSC · catalogo', EMSC_POLL_MS], ['ingv', 'INGV · diretto', INGV_POLL_MS],
-  ['solar', 'Kp · NOAA diretto', INGV_POLL_MS], ['stream', 'EMSC · diretta', 0],
+  ['solar', 'Kp · NOAA diretto', INGV_POLL_MS], ['rad', 'Radiazione · ECHO', INGV_POLL_MS], ['stream', 'EMSC · diretta', 0],
 ].map(([id, label, interval]) => [id, { label, interval, status: 'waiting', at: null }]));
 function setSource(id, status) {
   const entry = sourceHealth[id]; entry.status = status;
@@ -1459,6 +1459,61 @@ async function fetchIngvArea(area) {
   return parseIngvGeojson(await r.json());
 }
 
+// ---------- Radiazione spaziale (rilevatore ECHO su sismo-fvg) ----------
+// Pagina completa con grafici e storico: radiazione.html
+const RADIATION_API = 'https://sismo-fvg.gimmy077.workers.dev/api/radiation';
+function flareClassOf(f) {
+  if (f == null || !Number.isFinite(f)) return null;
+  if (f >= 1e-4) return 'X' + (f / 1e-4).toFixed(1);
+  if (f >= 1e-5) return 'M' + (f / 1e-5).toFixed(1);
+  if (f >= 1e-6) return 'C' + (f / 1e-6).toFixed(1);
+  if (f >= 1e-7) return 'B' + (f / 1e-7).toFixed(1);
+  return 'A' + (f / 1e-8).toFixed(1);
+}
+async function loadRadiation() {
+  setSource('rad', 'loading');
+  try {
+    const r = await fetch(RADIATION_API, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`ECHO HTTP ${r.status}`);
+    const d = await r.json();
+    const rows = Array.isArray(d.rows) ? d.rows : [];
+    const last = rows[rows.length - 1];
+    if (!last) throw new Error('Radiazione: nessun campione');
+    const ctx = d.context || {};
+    const s = Number.isFinite(ctx.s_scale) ? ctx.s_scale : 0;
+    const flare = ctx.flare_class || flareClassOf(ctx.xray_flux);
+    const sCol = s >= 3 ? '#ff2d78' : s >= 2 ? '#ff7a00' : s >= 1 ? '#ffe14d' : '#68e07f';
+    const fCol = !flare ? '' : flare[0] === 'X' ? '#ff2d78' : flare[0] === 'M' ? '#ff7a00' : flare[0] === 'C' ? '#ffe14d' : '#68e07f';
+    const radEl = $('st-rad');
+    radEl.textContent = 'S' + s; radEl.style.color = sCol;
+    const p10 = last.proton_10mev, e2 = last.electron_2mev;
+    $('rad-values').innerHTML =
+      `<div><b style="color:${sCol}">S${s}</b><span>scala S</span></div>` +
+      `<div><b>${p10 != null ? p10.toFixed(2) : '–'}</b><span>protoni ≥10 MeV</span></div>` +
+      `<div><b style="color:${fCol}">${flare || '–'}</b><span>raggi X</span></div>` +
+      `<div><b>${e2 != null ? Math.round(e2) : '–'}</b><span>elettroni ≥2 MeV</span></div>` +
+      `<div><b>${ctx.wind_speed != null ? Math.round(ctx.wind_speed) : '–'}</b><span>vento km/s</span></div>` +
+      `<div><b>${ctx.kp_now != null ? Number(ctx.kp_now).toFixed(1) : '–'}</b><span>Kp ora</span></div>`;
+    // mini-grafico protoni ≥10 MeV delle ultime 24 ore, scala logaritmica 0.1–1000 pfu
+    const cut = Date.now() - 24 * 3600_000;
+    const pts = rows.filter(x => Date.parse(x.time_tag) >= cut && x.proton_10mev > 0);
+    if (pts.length > 1) {
+      const t0 = Date.parse(pts[0].time_tag), t1 = Date.parse(pts[pts.length - 1].time_tag) || t0 + 1;
+      const y = v => 44 - (Math.log10(Math.min(Math.max(v, 0.1), 1000)) + 1) / 4 * 42;
+      const path = pts.map((x, i) => `${i ? 'L' : 'M'}${((Date.parse(x.time_tag) - t0) / (t1 - t0) * 200).toFixed(1)},${y(x.proton_10mev).toFixed(1)}`).join('');
+      $('rad-spark').innerHTML = `<svg viewBox="0 0 200 46" preserveAspectRatio="none">
+        <line x1="0" x2="200" y1="${y(10)}" y2="${y(10)}" stroke="#ffe14d" stroke-dasharray="3 3" stroke-width=".6" opacity=".6" vector-effect="non-scaling-stroke"/>
+        <path d="${path}" fill="none" stroke="#ff3b30" stroke-width="1.4" vector-effect="non-scaling-stroke"/></svg>`;
+    }
+    $('rad-note').textContent = `Protoni ≥10 MeV nelle ultime 24 ore (linea gialla: soglia S1). Ultimo campione ${new Date(last.time_tag).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}.`;
+    $('st-rad-box').title = `Radiazione spaziale (rilevatore ECHO): scala S${s}, protoni ≥10 MeV ${p10 != null ? p10.toFixed(2) : '–'} pfu, raggi X ${flare || '–'}. Clic per grafici e storico.`;
+    setSource('rad', 'ok');
+  } catch (err) {
+    setSource('rad', 'error'); console.error('Radiazione ECHO:', err);
+    $('st-rad').textContent = '–';
+  }
+}
+
 async function loadRegionalSources() {
   setSource('ingv', 'loading'); setSource('solar', 'loading');
   const solar = (async () => {
@@ -1787,6 +1842,8 @@ $('app-version').textContent = 'SismoGlobe ' + APP_VERSION;
   const monthLoaded = loadMonth();
   const regionalSourcesLoaded = loadRegionalSources();
   const emscLoaded = loadEmscCatalog();
+  loadRadiation();
+  setInterval(loadRadiation, INGV_POLL_MS);
   $('loading').classList.add('done');
   setInterval(loadFeed, POLL_MS);
   setInterval(loadMonth, MONTH_POLL_MS);

@@ -24,7 +24,7 @@
 <meta name="twitter:description" content="Terremoti nel mondo in tempo reale su globo 3D, con dati USGS, EMSC, INGV e monitoraggio solare NOAA.">
 <meta name="twitter:image" content="https://sismo.gimmycloud.net/og-image.png">
 
-<link rel="stylesheet" href="style.css?v=1.9.9">
+<link rel="stylesheet" href="style.css?v=1.10.0">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
 
 <script type="application/ld+json">
@@ -164,6 +164,11 @@
             <span class="stat-val" id="st-kp">–</span><span class="stat-lab">Kp solare</span><span aria-hidden="true" class="stat-action-icon">▣</span>
           </button>
         </div>
+        <div class="stat stat-rad" id="st-rad-box">
+          <a class="stat-action" href="radiazione.html" title="Radiazione spaziale dal rilevatore ECHO: apri la pagina con grafici e storico">
+            <span class="stat-val" id="st-rad">–</span><span class="stat-lab">radiazione</span><span aria-hidden="true" class="stat-action-icon">↗</span>
+          </a>
+        </div>
       </div>
 
       <div id="controls">
@@ -247,6 +252,15 @@
         <span><i style="background:#ff3b30"></i>6–7</span>
         <span><i style="background:#ff2d78"></i>7+</span>
       </div>
+    </section>
+
+    <section id="rad-box">
+      <h2>☢️ Radiazione <small>rilevatore ECHO</small>
+        <a id="rad-open" href="radiazione.html" title="Grafici completi e storico dal 1932">grafici ↗</a>
+      </h2>
+      <div id="rad-values" class="rad-values"><span class="rad-wait">In attesa dei dati…</span></div>
+      <div id="rad-spark" role="img" aria-label="Protoni ≥10 MeV nelle ultime 24 ore"></div>
+      <p id="rad-note" class="rad-note"></p>
     </section>
 
     <section id="list-box">
@@ -403,6 +417,6 @@
 <script src="https://unpkg.com/globe.gl@2.32.5/dist/globe.gl.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script src="explorer.js?v=1.9.0"></script>
-<script src="main.js?v=1.9.9"></script>
+<script src="main.js?v=1.10.0"></script>
 </body>
 </html>

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.10.0 - 2026-11-07
+
+- Nuova pagina `radiazione.html`: radiazione spaziale dal rilevatore ECHO (sismo-fvg) con valori attuali, grafici delle ultime 24 ore (protoni, elettroni, raggi X, vento solare, Kp), storico giornaliero del rilevatore, cicli solari dal 1932 (macchie, F10.7), tempeste geomagnetiche per anno e le tempeste record.
+- Nuovo riquadro "radiazione" (scala S) in alto accanto al Kp, che apre la pagina.
+- Nuova scheda "Radiazione spaziale" nella colonna laterale con i valori attuali e il mini-grafico dei protoni nelle 24 ore.
+- Nuova fonte "Radiazione · ECHO" nello stato delle fonti, aggiornata ogni 10 minuti.
+- Dati da `sismo-fvg.gimmy077.workers.dev/api/radiation` e `/api/radiation/history` (nuovo endpoint).
+
 ## v1.9.9 - 2026-10-16
 
 - Aggiunta la fonte `USGS`, `EMSC` o `INGV` al tooltip dei terremoti sul globo.

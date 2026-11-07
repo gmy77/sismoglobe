@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiazione spaziale — SismoGlobe</title>
+<meta name="description" content="Radiazione spaziale in tempo reale (protoni, elettroni, brillamenti, vento solare) dal rilevatore SismoGlobe/ECHO, con lo storico dei cicli solari e delle tempeste geomagnetiche dal 1932.">
+<link rel="canonical" href="https://sismo.gimmycloud.net/radiazione.html">
+<meta name="theme-color" content="#05070f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☢️</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #05070f; --panel: rgba(13, 18, 34, 0.92); --border: rgba(90, 130, 255, 0.18);
+    --text: #e4ebff; --dim: #99a7cf; --accent: #5a82ff;
+    --ok: #68e07f; --warn: #ffe14d; --orange: #ff7a00; --red: #ff3b30; --pink: #ff2d78; --violet: #c77dff; --cyan: #4dd8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(ellipse at top, #0c1430 0%, var(--bg) 60%); background-color: var(--bg);
+         color: var(--text); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--cyan); }
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+           padding: 12px 20px; background: rgba(5, 7, 15, 0.9); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0; font-size: 1.15rem; letter-spacing: .02em; }
+  header h1 small { color: var(--dim); font-weight: 400; }
+  .back { text-decoration: none; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .back:hover { border-color: var(--accent); }
+  #updated { margin-left: auto; color: var(--dim); font-size: .85rem; }
+  main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 60px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; }
+  section h2 { margin: 0 0 4px; font-size: 1.05rem; }
+  section > p.sub { margin: 0 0 14px; color: var(--dim); font-size: .88rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .card .lab { color: var(--dim); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+  .card .val { font-size: 1.7rem; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  .card .note { color: var(--dim); font-size: .8rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .chart { position: relative; height: 280px; }
+  .chart.tall { height: 340px; }
+  .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .insight { border-left: 3px solid var(--accent); padding: 8px 12px; background: rgba(90,130,255,.05); border-radius: 0 10px 10px 0; }
+  .insight b { color: var(--text); }
+  .insight span { color: var(--dim); font-size: .88rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.05); }
+  th { color: var(--dim); font-weight: 500; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .err { color: var(--orange); }
+  footer { color: var(--dim); font-size: .82rem; text-align: center; padding: 10px 16px 30px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="./">← Globo</a>
+  <h1>☢️ Radiazione spaziale <small>— il nostro rilevatore + 90 anni di Sole</small></h1>
+  <span id="updated">caricamento…</span>
+</header>
+
+<main>
+  <section>
+    <h2>Adesso</h2>
+    <p class="sub">Ultimi valori registrati dal rilevatore SismoGlobe/ECHO (satelliti NOAA GOES e DSCOVR, campionati ogni 5 minuti).</p>
+    <div class="cards" id="now"></div>
+  </section>
+
+  <section>
+    <h2>Ultime 24 ore</h2>
+    <p class="sub">Particelle cariche intorno alla Terra e raggi X dal Sole. Scale logaritmiche: ogni tacca vale 10 volte la precedente.</p>
+    <div class="grid2">
+      <div><div class="chart"><canvas id="c-part"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-xray"></canvas></div></div>
+    </div>
+    <div class="chart" style="margin-top:18px;height:220px"><canvas id="c-wind"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Storico del rilevatore</h2>
+    <p class="sub" id="det-sub">Massimi giornalieri da quando il rilevatore registra.</p>
+    <div class="grid2">
+      <div><div class="chart"><canvas id="c-det-part"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-det-xray"></canvas></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cosa si ricava</h2>
+    <p class="sub">Numeri calcolati in automatico dai dati qui sotto.</p>
+    <div class="insights" id="insights"></div>
+  </section>
+
+  <section>
+    <h2>I cicli solari dal 1932</h2>
+    <p class="sub">Numero di macchie solari (media mensile e media mobile di 13 mesi) e flusso radio F10.7, il "termometro" dell'attività del Sole. Ogni gobba è un ciclo di circa 11 anni.</p>
+    <div class="chart tall"><canvas id="c-cycles"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Gli ultimi due anni, giorno per giorno</h2>
+    <p class="sub">Macchie solari e indice Ap (disturbo del campo magnetico terrestre). Le punte di Ap sono le tempeste geomagnetiche.</p>
+    <div class="chart"><canvas id="c-daily"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Tempeste geomagnetiche per anno</h2>
+    <p class="sub">Giorni con Ap ≥ 30 (tempesta, G1 e oltre) e con Ap ≥ 100 (tempesta estrema, G4–G5).</p>
+    <div class="chart"><canvas id="c-storms"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Le tempeste più forti dal 1932</h2>
+    <p class="sub">Giorni con l'indice Ap più alto mai registrato.</p>
+    <table id="top"><thead><tr><th>#</th><th>Giorno</th><th class="num">Ap</th><th class="num">Macchie</th><th>Note</th></tr></thead><tbody></tbody></table>
+  </section>
+</main>
+
+<footer>
+  Dati: <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener">NOAA SWPC</a> (GOES, DSCOVR) raccolti dal rilevatore
+  <a href="https://sismo-fvg.gimmy077.workers.dev/radiazione" target="_blank" rel="noopener">sismo-fvg / ECHO</a> ·
+  attività solare <a href="https://kp.gfz.de/" target="_blank" rel="noopener">GFZ Potsdam</a> (macchie SILSO, F10.7, Ap) ·
+  <a href="./">SismoGlobe</a>
+</footer>
+
+<script>
+const API = 'https://sismo-fvg.gimmy077.workers.dev';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = { ok: css('--ok'), warn: css('--warn'), orange: css('--orange'), red: css('--red'), pink: css('--pink'),
+            violet: css('--violet'), cyan: css('--cyan'), accent: css('--accent'), dim: css('--dim'), text: css('--text') };
+Chart.defaults.color = C.dim;
+Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+Chart.defaults.animation = false;
+Chart.defaults.maintainAspectRatio = false;
+
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v == null || !isFinite(v) ? '–' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: d, minimumFractionDigits: d });
+const sci = v => v == null || !isFinite(v) ? '–' : Number(v).toExponential(1).replace('e', '·10^').replace('+', '');
+
+// Classe GOES di un flusso X (W/m²)
+function flareClass(f) {
+  if (f == null || !isFinite(f)) return null;
+  if (f >= 1e-4) return 'X' + (f / 1e-4).toFixed(1);
+  if (f >= 1e-5) return 'M' + (f / 1e-5).toFixed(1);
+  if (f >= 1e-6) return 'C' + (f / 1e-6).toFixed(1);
+  if (f >= 1e-7) return 'B' + (f / 1e-7).toFixed(1);
+  return 'A' + (f / 1e-8).toFixed(1);
+}
+const flareColor = c => !c ? C.dim : c[0] === 'X' ? C.pink : c[0] === 'M' ? C.orange : c[0] === 'C' ? C.warn : C.ok;
+const sColor = s => s >= 3 ? C.pink : s >= 2 ? C.orange : s >= 1 ? C.warn : C.ok;
+const kpColor = k => k >= 7 ? C.pink : k >= 5 ? C.orange : k >= 4 ? C.warn : C.ok;
+
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const pow10 = e => '10' + String(e).split('').map(ch => SUP[ch]).join('');
+const hhmm = t => new Date(t).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+const logAxis = (title, pos = 'left', extra = {}) => ({ type: 'logarithmic', position: pos, title: { display: true, text: title },
+  ticks: { callback: v => { const e = Math.log10(v); return Number.isInteger(Math.round(e * 1e6) / 1e6) ? pow10(Math.round(e)) : ''; } }, ...extra });
+const xCat = (max = 8) => ({ ticks: { maxTicksLimit: max, maxRotation: 0, autoSkip: true }, grid: { display: false } });
+
+// Linee orizzontali di riferimento (soglie) disegnate a mano: niente plugin esterni
+const thresholds = {
+  id: 'thresholds',
+  afterDatasetsDraw(chart, _a, opts) {
+    const lines = opts && opts.lines; if (!lines) return;
+    const { ctx, chartArea: a } = chart;
+    for (const l of lines) {
+      const sc = chart.scales[l.axis || 'y']; if (!sc) continue;
+      const y = sc.getPixelForValue(l.value); if (y < a.top || y > a.bottom) continue;
+      ctx.save(); ctx.strokeStyle = l.color; ctx.setLineDash([4, 4]); ctx.globalAlpha = .7;
+      ctx.beginPath(); ctx.moveTo(a.left, y); ctx.lineTo(a.right, y); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = .9; ctx.fillStyle = l.color; ctx.font = '11px system-ui';
+      ctx.fillText(l.label, a.right - ctx.measureText(l.label).width - 4, y - 4); ctx.restore();
+    }
+  },
+};
+Chart.register(thresholds);
+
+// Minimi dei cicli solari (SILSO): inizio di ciascun ciclo
+const CYCLES = [[17, '1933-09'], [18, '1944-02'], [19, '1954-04'], [20, '1964-10'], [21, '1976-03'],
+                [22, '1986-09'], [23, '1996-08'], [24, '2008-12'], [25, '2019-12']];
+const STORM_NOTES = {
+  '1989-03-13': 'Blackout del Québec: 6 milioni di persone senza corrente',
+  '2024-05-11': '"Tempesta di Gannon": aurora vista in tutta Italia',
+  '2003-10-29': 'Tempeste di Halloween 2003', '2003-10-30': 'Tempeste di Halloween 2003',
+  '1940-03-24': 'Disturbi a telegrafi e reti elettriche in USA',
+  '1960-11-13': 'Aurora vista fino al Mediterraneo', '1941-09-18': 'Aurora in tutto il Nord America',
+  '1958-02-11': 'Aurora fino in Messico', '1991-03-24': 'Grande tempesta del ciclo 22',
+  '2024-10-10': 'Aurora di ottobre 2024, vista anche in Italia',
+};
+
+function smooth13(vals) {
+  // media mobile centrata di 13 mesi (metà peso agli estremi), come la usa SILSO
+  return vals.map((_, i) => {
+    if (i < 6 || i > vals.length - 7) return null;
+    let s = 0; for (let k = -6; k <= 6; k++) { const v = vals[i + k]; if (v == null) return null; s += (Math.abs(k) === 6 ? 0.5 : 1) * v; }
+    return s / 12;
+  });
+}
+
+function renderNow(live) {
+  const ctx = live.context || {}, rows = live.rows || [], last = rows[rows.length - 1] || {};
+  const flare = ctx.flare_class || flareClass(ctx.xray_flux);
+  const cards = [
+    ['Scala S (tempesta radiativa)', ctx.s_scale == null ? '–' : 'S' + ctx.s_scale, sColor(ctx.s_scale || 0), ctx.s_scale ? 'tempesta di particelle in corso' : 'nessuna tempesta di protoni'],
+    ['Protoni ≥10 MeV', fmt(last.proton_10mev, 2), (last.proton_10mev || 0) >= 10 ? C.warn : C.ok, 'pfu · soglia S1 = 10 pfu'],
+    ['Elettroni ≥2 MeV', fmt(last.electron_2mev, 0), (last.electron_2mev || 0) >= 1000 ? C.warn : C.ok, 'pfu · allerta satelliti ≥1000'],
+    ['Raggi X (brillamento)', flare || '–', flareColor(flare), 'classe GOES: A, B, C, M, X'],
+    ['Vento solare', fmt(ctx.wind_speed, 0), (ctx.wind_speed || 0) >= 600 ? C.warn : C.ok, 'km/s · densità ' + fmt(ctx.wind_density, 1) + ' p/cm³'],
+    ['Kp attuale', fmt(ctx.kp_now, 1), kpColor(ctx.kp_now || 0), 'disturbo geomagnetico (0–9)'],
+  ];
+  $('now').innerHTML = cards.map(([l, v, c, n]) =>
+    `<div class="card"><div class="lab">${l}</div><div class="val" style="color:${c}">${v}</div><div class="note">${n}</div></div>`).join('');
+  if (last.time_tag) $('updated').textContent = 'ultimo campione ' + new Date(last.time_tag).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function renderLive(live) {
+  const cut = Date.now() - 24 * 3600e3;
+  let rows = (live.rows || []).filter(r => Date.parse(r.time_tag) >= cut);
+  if (rows.length < 10) rows = (live.rows || []).slice(-288);
+  const L = rows.map(r => hhmm(r.time_tag));
+  const v = (k) => rows.map(r => r[k] != null && r[k] > 0 ? r[k] : null);
+  new Chart($('c-part'), {
+    type: 'line',
+    data: { labels: L, datasets: [
+      { label: 'Protoni ≥10 MeV', data: v('proton_10mev'), borderColor: C.red, pointRadius: 0, borderWidth: 1.6, spanGaps: true, yAxisID: 'y' },
+      { label: 'Protoni ≥100 MeV', data: v('proton_100mev'), borderColor: C.violet, pointRadius: 0, borderWidth: 1.4, spanGaps: true, yAxisID: 'y' },
+      { label: 'Elettroni ≥2 MeV', data: v('electron_2mev'), borderColor: C.cyan, pointRadius: 0, borderWidth: 1.4, spanGaps: true, yAxisID: 'y2' },
+    ] },
+    options: { plugins: { title: { display: true, text: 'Particelle (pfu)' }, thresholds: { lines: [{ value: 10, label: 'S1', color: C.warn }] } },
+      scales: { x: xCat(), y: logAxis('protoni', 'left', { min: 0.01 }), y2: logAxis('elettroni', 'right', { grid: { drawOnChartArea: false } }) } },
+  });
+  new Chart($('c-xray'), {
+    type: 'line',
+    data: { labels: L, datasets: [{ label: 'Flusso X 0.1–0.8 nm', data: v('xray_flux'), borderColor: C.warn, backgroundColor: 'rgba(255,225,77,.08)', fill: true, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
+    options: { plugins: { title: { display: true, text: 'Raggi X dal Sole (W/m²) — brillamenti' },
+      thresholds: { lines: [{ value: 1e-6, label: 'C', color: C.warn }, { value: 1e-5, label: 'M', color: C.orange }, { value: 1e-4, label: 'X', color: C.pink }] } },
+      scales: { x: xCat(), y: logAxis('W/m²', 'left', { min: 1e-8, max: 1e-3 }) } },
+  });
+  new Chart($('c-wind'), {
+    data: { labels: L, datasets: [
+      { type: 'line', label: 'Vento solare (km/s)', data: v('wind_speed'), borderColor: C.accent, pointRadius: 0, borderWidth: 1.6, spanGaps: true, yAxisID: 'y' },
+      { type: 'line', label: 'Kp', data: rows.map(r => r.kp_now), borderColor: C.orange, stepped: true, pointRadius: 0, borderWidth: 1.4, spanGaps: true, yAxisID: 'y2' },
+    ] },
+    options: { plugins: { title: { display: true, text: 'Vento solare e Kp' } },
+      scales: { x: xCat(12), y: { title: { display: true, text: 'km/s' } }, y2: { position: 'right', min: 0, max: 9, title: { display: true, text: 'Kp' }, grid: { drawOnChartArea: false } } } },
+  });
+}
+
+function renderDetector(hist) {
+  const days = hist.days || [];
+  if (!days.length) return;
+  $('det-sub').textContent = `Massimi giornalieri dal ${new Date(hist.since).toLocaleDateString('it-IT')} (${days.length} giorni registrati; i giorni mancanti sono periodi in cui il rilevatore era fermo).`;
+  const L = days.map(d => d.giorno.slice(5).split('-').reverse().join('/'));
+  new Chart($('c-det-part'), {
+    type: 'bar',
+    data: { labels: L, datasets: [
+      { label: 'Protoni ≥10 MeV max', data: days.map(d => d.p10_max), backgroundColor: 'rgba(255,59,48,.7)', yAxisID: 'y' },
+      { label: 'Elettroni ≥2 MeV max', data: days.map(d => d.e2_max), type: 'line', borderColor: C.cyan, pointRadius: 2, yAxisID: 'y2' },
+    ] },
+    options: { plugins: { title: { display: true, text: 'Particelle: massimo del giorno (pfu)' }, thresholds: { lines: [{ value: 1000, label: 'allerta elettroni', color: C.cyan, axis: 'y2' }] } },
+      scales: { x: xCat(10), y: logAxis('protoni', 'left', { min: 0.05 }), y2: logAxis('elettroni', 'right', { grid: { drawOnChartArea: false } }) } },
+  });
+  new Chart($('c-det-xray'), {
+    type: 'bar',
+    data: { labels: L, datasets: [{ label: 'Brillamento più forte', data: days.map(d => d.xray_max),
+      backgroundColor: days.map(d => flareColor(d.flare_max)) }] },
+    options: { plugins: { legend: { display: false }, title: { display: true, text: 'Brillamento più forte del giorno' },
+      tooltip: { callbacks: { label: c => 'classe ' + (days[c.dataIndex].flare_max || '–') } },
+      thresholds: { lines: [{ value: 1e-6, label: 'C', color: C.warn }, { value: 1e-5, label: 'M', color: C.orange }, { value: 1e-4, label: 'X', color: C.pink }] } },
+      scales: { x: xCat(10), y: logAxis('W/m²', 'left', { min: 1e-8, max: 1e-3 }) } },
+  });
+}
+
+function renderSun(hist) {
+  const s = hist.sun || {}, M = s.monthly || [];
+  if (!M.length) return;
+  const L = M.map(m => m.mese);
+  const sm = smooth13(M.map(m => m.sn));
+  new Chart($('c-cycles'), {
+    data: { labels: L, datasets: [
+      { type: 'bar', label: 'Macchie (media mensile)', data: M.map(m => m.sn), backgroundColor: 'rgba(255,225,77,.35)', barPercentage: 1, categoryPercentage: 1, yAxisID: 'y' },
+      { type: 'line', label: 'Macchie (media 13 mesi)', data: sm, borderColor: C.warn, pointRadius: 0, borderWidth: 2.2, spanGaps: true, yAxisID: 'y' },
+      { type: 'line', label: 'Flusso radio F10.7', data: M.map(m => m.f107), borderColor: C.cyan, pointRadius: 0, borderWidth: 1.2, spanGaps: true, yAxisID: 'y2' },
+    ] },
+    options: { plugins: { tooltip: { mode: 'index', intersect: false } },
+      scales: { x: { ticks: { maxTicksLimit: 20, maxRotation: 0, callback(v) { const l = this.getLabelForValue(v); return l.endsWith('-01') ? l.slice(0, 4) : ''; } }, grid: { display: false } },
+        y: { title: { display: true, text: 'macchie' }, min: 0 }, y2: { position: 'right', title: { display: true, text: 'F10.7 (sfu)' }, grid: { drawOnChartArea: false } } } },
+    plugins: [{ id: 'cycleLabels', afterDatasetsDraw(chart) {
+      const { ctx, chartArea: a, scales: { x } } = chart;
+      ctx.save(); ctx.fillStyle = C.dim; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+      for (const [n, start] of CYCLES) {
+        const i = L.indexOf(start); if (i < 0) continue;
+        const px = x.getPixelForValue(i);
+        ctx.globalAlpha = .35; ctx.strokeStyle = C.dim; ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+        ctx.globalAlpha = .9; ctx.fillText('ciclo ' + n, px + 4, a.top + 12);
+      }
+      ctx.restore();
+    } }],
+  });
+
+  const D = s.daily || [];
+  new Chart($('c-daily'), {
+    data: { labels: D.map(d => d.giorno), datasets: [
+      { type: 'line', label: 'Macchie', data: D.map(d => d.sn), borderColor: C.warn, pointRadius: 0, borderWidth: 1.2, yAxisID: 'y' },
+      { type: 'bar', label: 'Ap', data: D.map(d => d.ap), backgroundColor: D.map(d => d.ap >= 100 ? C.pink : d.ap >= 30 ? C.orange : 'rgba(90,130,255,.5)'), yAxisID: 'y2' },
+    ] },
+    options: { plugins: { tooltip: { mode: 'index', intersect: false }, thresholds: { lines: [{ value: 30, label: 'tempesta', color: C.orange, axis: 'y2' }] } },
+      scales: { x: { ticks: { maxTicksLimit: 12, maxRotation: 0, callback(v) { const l = this.getLabelForValue(v); return l.slice(8) === '01' ? l.slice(0, 7) : ''; } }, grid: { display: false } },
+        y: { title: { display: true, text: 'macchie' }, min: 0 }, y2: { position: 'right', min: 0, title: { display: true, text: 'Ap' }, grid: { drawOnChartArea: false } } } },
+  });
+
+  const Y = (s.yearly || []).filter(y => y.anno >= '1932');
+  new Chart($('c-storms'), {
+    data: { labels: Y.map(y => y.anno), datasets: [
+      { type: 'bar', label: 'Giorni di tempesta (Ap≥30)', data: Y.map(y => y.tempeste), backgroundColor: 'rgba(255,122,0,.7)', stack: 's' },
+      { type: 'bar', label: 'di cui estreme (Ap≥100)', data: Y.map(y => y.estreme), backgroundColor: C.pink, stack: 'e' },
+      { type: 'line', label: 'Macchie medie', data: Y.map(y => y.sn), borderColor: C.warn, pointRadius: 0, borderWidth: 1.5, yAxisID: 'y2' },
+    ] },
+    options: { plugins: { tooltip: { mode: 'index', intersect: false } },
+      scales: { x: { ticks: { maxTicksLimit: 20, maxRotation: 0 }, grid: { display: false } }, y: { title: { display: true, text: 'giorni' }, min: 0 },
+        y2: { position: 'right', min: 0, title: { display: true, text: 'macchie' }, grid: { drawOnChartArea: false } } } },
+  });
+
+  $('top').querySelector('tbody').innerHTML = (s.top || []).map((t, i) =>
+    `<tr><td>${i + 1}</td><td>${new Date(t.giorno + 'T12:00:00Z').toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
+     <td class="num" style="color:${t.ap >= 200 ? C.pink : C.orange}">${t.ap}</td><td class="num">${t.sn ?? '–'}</td><td>${STORM_NOTES[t.giorno] || ''}</td></tr>`).join('');
+
+  renderInsights(hist, M, sm, Y);
+}
+
+function renderInsights(hist, M, sm, Y) {
+  const out = [];
+  const cur = CYCLES[CYCLES.length - 1];
+  const i0 = M.findIndex(m => m.mese === cur[1]);
+  if (i0 >= 0) {
+    let best = -1, bi = -1;
+    for (let i = i0; i < sm.length; i++) if (sm[i] != null && sm[i] > best) { best = sm[i]; bi = i; }
+    const prev = CYCLES[CYCLES.length - 2], ip = M.findIndex(m => m.mese === prev[1]);
+    let pbest = -1; for (let i = ip; i < i0; i++) if (sm[i] != null && sm[i] > pbest) pbest = sm[i];
+    if (bi >= 0) out.push(['Picco del ciclo ' + cur[0], `${fmt(best, 0)} macchie (media 13 mesi) a ${M[bi].mese.split('-').reverse().join('/')}`,
+      `${best > pbest ? 'più forte' : 'più debole'} del ciclo ${prev[0]} (picco ${fmt(pbest, 0)})`]);
+    const anniCiclo = (M.length - 1 - i0) / 12;
+    out.push(['Dove siamo nel ciclo', `anno ${fmt(anniCiclo, 1)} su ~11`, anniCiclo > 5.5 ? 'fase discendente: meno macchie, ma le tempeste forti sono ancora frequenti' : 'fase crescente']);
+  }
+  const ultimi = M.slice(-3).filter(m => m.sn != null);
+  if (ultimi.length) out.push(['Macchie negli ultimi 3 mesi', fmt(ultimi.reduce((s, m) => s + m.sn, 0) / ultimi.length, 0) + ' in media', 'media 1932–oggi: ' + fmt(M.filter(m => m.sn != null).reduce((s, m) => s + m.sn, 0) / M.filter(m => m.sn != null).length, 0)]);
+  const anno = String(new Date().getFullYear()), y = Y.find(r => r.anno === anno);
+  if (y) {
+    const media = Y.filter(r => r.anno < anno).reduce((s, r) => s + r.tempeste, 0) / Y.filter(r => r.anno < anno).length;
+    out.push(['Tempeste geomagnetiche ' + anno, `${y.tempeste} giorni (${y.estreme} estreme)`, `media storica ${fmt(media, 0)} giorni l'anno · Ap massimo ${y.ap_max}`]);
+  }
+  const rec = Y.reduce((a, b) => (b.tempeste > (a?.tempeste ?? -1) ? b : a), null);
+  if (rec) out.push(['Anno più tempestoso', `${rec.anno}: ${rec.tempeste} giorni di tempesta`, 'macchie medie ' + fmt(rec.sn, 0)]);
+  const days = hist.days || [];
+  if (days.length) {
+    const maxX = days.reduce((a, b) => (b.xray_max || 0) > (a.xray_max || 0) ? b : a);
+    out.push(['Brillamento più forte visto dal rilevatore', maxX.flare_max || '–', 'il ' + new Date(maxX.giorno).toLocaleDateString('it-IT')]);
+    const s1 = days.filter(d => (d.s_max || 0) >= 1).length;
+    out.push(['Tempeste di protoni (S≥1) registrate', `${s1} giorni su ${days.length}`, s1 ? 'radiazione alta per satelliti e voli polari' : 'nessuna dall\'inizio delle registrazioni']);
+  }
+  $('insights').innerHTML = out.map(([t, v, n]) => `<div class="insight"><b>${t}</b><br>${v}<br><span>${n}</span></div>`).join('');
+}
+
+async function load() {
+  try {
+    const [live, hist] = await Promise.all([
+      fetch(API + '/api/radiation').then(r => r.json()),
+      fetch(API + '/api/radiation/history').then(r => r.json()),
+    ]);
+    renderNow(live); renderLive(live); renderDetector(hist); renderSun(hist);
+  } catch (e) {
+    $('updated').innerHTML = '<span class="err">Dati non raggiungibili: ' + e.message + '</span>';
+    console.error(e);
+  }
+}
+load();
+</script>
+</body>
+</html>
