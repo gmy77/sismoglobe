@@ -40,10 +40,27 @@ poi aprire <http://localhost:8642>.
 - Terremoti minori: [EMSC – FDSN event web service](https://www.seismicportal.eu/fdsn-wsevent.html)
 - Micro-sismicita FVG/Campi Flegrei: [INGV diretto](https://webservices.ingv.it/fdsnws/event/1/), M0.3+, ultimi 30 giorni, ogni 10 minuti.
 - Indice Kp: [NOAA SWPC diretto](https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json), massimo e media dell'ultimo giorno UTC disponibile, ogni 10 minuti.
+- Radiazione spaziale (dalla v1.10.0): rilevatore ECHO del worker `sismo-fvg` — `https://sismo-fvg.gimmy077.workers.dev/api/radiation` (ultimi campioni a 5 minuti: protoni ≥10/≥100 MeV, elettroni ≥2 MeV, raggi X, vento solare, Kp, scala S) e `/api/radiation/history` (storico giornaliero del rilevatore + attività solare GFZ dal 1932). Ogni 10 minuti. Dettagli: `sismo-worker/RADIAZIONE.md` nel repo [sismo-echo](https://github.com/gmy77/sismo-echo).
 - Confini: [world-atlas](https://github.com/topojson/world-atlas) (Natural Earth 110m)
 - Rendering: [globe.gl](https://globe.gl) (three.js)
 
 Diagnostica delle fonti e log Cloudflare: [SOURCE-OPERATIONS.md](SOURCE-OPERATIONS.md).
+
+## Radiazione spaziale (v1.10.0)
+
+- **Riquadro "radiazione"** in alto, accanto al Kp: scala S delle tempeste di particelle (S0 = calma). Clic → pagina dedicata.
+- **Scheda "☢️ Radiazione"** nella colonna laterale: scala S, protoni ≥10 MeV, classe raggi X, elettroni ≥2 MeV, vento solare, Kp, mini-grafico protoni 24 ore.
+- **Pagina [`radiazione.html`](https://sismo.gimmycloud.net/radiazione.html)** (Chart.js 4.4.1 da cdnjs): valori attuali, grafici 24 ore, storico del rilevatore, cicli solari dal 1932 (macchie + F10.7), ultimi 2 anni giorno per giorno, tempeste geomagnetiche per anno, le 12 tempeste più forti, statistiche ricavate in automatico.
+- Lo storico del **rilevatore** parte dal 2026-09-21 (con un buco 11/10–7/11/2026, worker bloccato); lo storico lungo è l'attività solare GFZ (Ap, macchie, F10.7), perché gli archivi NOAA giornalieri di particelle non sono più scaricabili.
+- Se il worker non risponde, la fonte "Radiazione · ECHO" nello stato delle fonti va in errore e il riquadro mostra "–": il resto del sito non ne risente.
+
+## Test
+
+```bash
+# linkedom non è nel repo: installarlo in una cartella a parte
+npm install --prefix /percorso/a/parte linkedom
+NODE_PATH=/percorso/a/parte/node_modules node tests/logic.cjs   # 20 test logici
+```
 
 ## Anteprima v1.9.0 (da verificare nel browser)
 
