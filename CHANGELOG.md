@@ -1,5 +1,10 @@
 # Changelog
 
+## Terra dinamica - 2026-11-08
+
+- Nuova pagina `terra.html`: durata del giorno dal 1962 e UT1−UTC con i secondi intercalari (IERS via CelesTrak), traccia e deriva del polo di rotazione, inclinazione dell'asse (nutazione 18,6 anni e ciclo di 41 000 anni), magnetosfera in tempo reale (forma della magnetopausa con il modello di Shue, vento solare, Bz, Dst, Kp, ovale aurorale OVATION), campo magnetico IGRF dal 1900 e calcolatore della gravità con mappa e anomalie.
+- Nuovo riquadro "terra" in alto accanto alla radiazione; link anche dalla pagina radiazione e nella sitemap.
+
 ## v1.10.0 - 2026-11-07
 
 - Nuova pagina `radiazione.html`: radiazione spaziale dal rilevatore ECHO (sismo-fvg) con valori attuali, grafici delle ultime 24 ore (protoni, elettroni, raggi X, vento solare, Kp), storico giornaliero del rilevatore, cicli solari dal 1932 (macchie, F10.7), tempeste geomagnetiche per anno e le tempeste record.

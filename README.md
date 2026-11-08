@@ -46,6 +46,15 @@ poi aprire <http://localhost:8642>.
 
 Diagnostica delle fonti e log Cloudflare: [SOURCE-OPERATIONS.md](SOURCE-OPERATIONS.md).
 
+## Terra dinamica (2026-11-08)
+
+- **Pagina [`terra.html`](https://sismo.gimmycloud.net/terra.html)**, aperta dal riquadro "terra" in alto. Tutto lato browser, nessun worker: le fonti hanno CORS aperto.
+- **Rotazione**: durata del giorno (LOD) dal 1962, ultimi 3 anni con previsione IERS, UT1−UTC dal 1972 con i secondi intercalari. Fonte `celestrak.org/SpaceData/EOP-All.csv` (~2,4 MB, una volta per visita).
+- **Asse**: spirale del polo degli ultimi 6,4 anni, deriva del polo medio a blocchi di 6 anni, obliquità IAU 2006 + termini principali di nutazione, curva di Laskar 1986 (±10 000 anni).
+- **Magnetosfera** (NOAA SWPC, ogni 10 min): `rtsw_wind_1m`/`rtsw_mag_1m` (solo righe `active`), `kyoto-dst`, `noaa-planetary-k-index`, `ovation_aurora_latest`. Magnetopausa con Shue et al. 1998; l'onda d'urto è indicativa (1,32 × magnetopausa).
+- **Campo magnetico**: termine di dipolo IGRF-14 (1900, 1950–2025 + variazione secolare 2025–30) scritto nella pagina.
+- **Gravità**: gravità normale WGS84 (Somigliana) + correzione di quota; le anomalie (geoide) sono una tabella descrittiva con posizioni approssimate, non una mappa misurata.
+
 ## Radiazione spaziale (v1.10.0)
 
 - **Riquadro "radiazione"** in alto, accanto al Kp: scala S delle tempeste di particelle (S0 = calma). Clic → pagina dedicata.

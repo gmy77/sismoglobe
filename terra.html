@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terra dinamica — SismoGlobe</title>
+<meta name="description" content="La Terra che si muove: durata del giorno e rotazione (IERS), spostamento del polo e inclinazione dell'asse, magnetosfera e vento solare in tempo reale (NOAA), campo magnetico dal 1900 e gravità punto per punto.">
+<link rel="canonical" href="https://sismo.gimmycloud.net/terra.html">
+<meta name="theme-color" content="#05070f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root {
+    --bg: #05070f; --panel: rgba(13, 18, 34, 0.92); --border: rgba(90, 130, 255, 0.18);
+    --text: #e4ebff; --dim: #99a7cf; --accent: #5a82ff;
+    --ok: #68e07f; --warn: #ffe14d; --orange: #ff7a00; --red: #ff3b30; --pink: #ff2d78; --violet: #c77dff; --cyan: #4dd8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(ellipse at top, #0c1430 0%, var(--bg) 60%); background-color: var(--bg);
+         color: var(--text); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--cyan); }
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+           padding: 12px 20px; background: rgba(5, 7, 15, 0.9); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0; font-size: 1.15rem; letter-spacing: .02em; }
+  header h1 small { color: var(--dim); font-weight: 400; }
+  .back { text-decoration: none; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .back:hover { border-color: var(--accent); }
+  nav.jump { display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.jump a { text-decoration: none; font-size: .82rem; color: var(--dim); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); }
+  nav.jump a:hover { color: var(--text); border-color: var(--accent); }
+  #updated { margin-left: auto; color: var(--dim); font-size: .85rem; }
+  main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 60px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 20px; scroll-margin-top: 80px; }
+  section h2 { margin: 0 0 4px; font-size: 1.05rem; }
+  section h3 { margin: 18px 0 4px; font-size: .95rem; color: var(--text); }
+  section p.sub { margin: 0 0 14px; color: var(--dim); font-size: .88rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .card { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .card .lab { color: var(--dim); font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; }
+  .card .val { font-size: 1.55rem; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  .card .val small { font-size: .8rem; font-weight: 500; color: var(--dim); }
+  .card .note { color: var(--dim); font-size: .8rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } section { padding: 14px; } }
+  @media (max-width: 600px) { header { position: static; padding: 10px 16px; } #updated { margin-left: 0; } main { padding: 14px 10px 40px; } }
+  .chart { position: relative; height: 280px; }
+  .chart.tall { height: 340px; }
+  .chart.square { height: 360px; }
+  .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+  .insight { border-left: 3px solid var(--accent); padding: 8px 12px; background: rgba(90,130,255,.05); border-radius: 0 10px 10px 0; }
+  .insight b { color: var(--text); }
+  .insight span { color: var(--dim); font-size: .88rem; }
+  canvas.map { width: 100%; display: block; border-radius: 10px; background: #070b18; cursor: crosshair; }
+  .calc { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 12px 0; }
+  .calc label { display: flex; flex-direction: column; font-size: .78rem; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; gap: 4px; }
+  .calc input, .calc select { background: #0a1024; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font: inherit; width: 130px; }
+  .calc select { width: 220px; }
+  .calc output { font-size: 1.05rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.05); }
+  th { color: var(--dim); font-weight: 500; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tablewrap { overflow-x: auto; }
+  .err { color: var(--orange); font-size: .88rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--dim); font-size: .8rem; margin-top: 8px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+  footer { color: var(--dim); font-size: .82rem; text-align: center; padding: 10px 16px 30px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="./">← Globo</a>
+  <h1>🧭 Terra dinamica <small>— rotazione, asse, magnetosfera, gravità</small></h1>
+  <nav class="jump">
+    <a href="#s-rot">Rotazione</a><a href="#s-asse">Asse</a><a href="#s-mag">Magnetosfera</a><a href="#s-campo">Campo</a><a href="#s-grav">Gravità</a>
+  </nav>
+  <span id="updated">caricamento…</span>
+</header>
+
+<main>
+  <section>
+    <h2>Adesso</h2>
+    <p class="sub">Gli ultimi valori misurati: rotazione dal servizio internazionale IERS (aggiornato una volta al giorno), magnetosfera dai satelliti NOAA in tempo reale (ogni 10 minuti).</p>
+    <div class="cards" id="now"></div>
+  </section>
+
+  <section id="s-rot">
+    <h2>🕐 Quanto dura un giorno</h2>
+    <p class="sub">La Terra non gira a velocità costante. Il grafico mostra di quanti <b>millisecondi</b> un giorno supera le 86 400 s esatte (misure IERS con radiotelescopi VLBI e satelliti). Sopra lo zero la Terra rallenta, sotto accelera. Le oscillazioni veloci sono maree e venti; quelle lente vengono dal nucleo liquido.</p>
+    <div class="chart tall"><canvas id="c-lod-all"></canvas></div>
+    <div class="grid2" style="margin-top:18px">
+      <div><div class="chart"><canvas id="c-lod-recent"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-ut1"></canvas></div></div>
+    </div>
+    <div class="insights" id="ins-rot"></div>
+  </section>
+
+  <section id="s-asse">
+    <h2>🌐 L'asse terrestre: polo che vaga e inclinazione</h2>
+    <p class="sub">Due cose diverse. <b>Il polo che vaga</b>: l'asse di rotazione si sposta rispetto alla crosta di qualche metro, disegnando una spirale (oscillazione di Chandler, ~433 giorni, più quella annuale) e scivolando lentamente verso il Canada per lo scioglimento dei ghiacci e il rimbalzo post-glaciale. <b>L'inclinazione</b> (obliquità): l'angolo fra l'asse e l'orbita, oggi ~23,44°, che oscilla in cicli di 18,6 anni (nutazione) e di 41 000 anni (cicli di Milanković, che regolano le glaciazioni).</p>
+    <div class="grid2">
+      <div><div class="chart square"><canvas id="c-pole"></canvas></div></div>
+      <div><div class="chart square"><canvas id="c-pole-drift"></canvas></div></div>
+    </div>
+    <div class="grid2" style="margin-top:18px">
+      <div><div class="chart"><canvas id="c-obl-short"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-obl-long"></canvas></div></div>
+    </div>
+    <div class="insights" id="ins-asse"></div>
+  </section>
+
+  <section id="s-mag">
+    <h2>🛡️ Magnetosfera adesso</h2>
+    <p class="sub">Il campo magnetico terrestre fa da scudo al vento solare. Quando il vento spinge forte e il suo campo punta a sud (Bz negativo), lo scudo si comprime, entra energia e nascono tempeste geomagnetiche e aurore. La forma qui sotto è calcolata in tempo reale dai dati dei satelliti in L1 (modello di Shue et al., 1998).</p>
+    <div class="grid2">
+      <div>
+        <canvas id="mp-canvas" class="map" width="640" height="420" style="cursor:default"></canvas>
+        <div class="legend"><span><i style="background:#4dd8ff"></i>magnetopausa adesso</span><span><i style="background:#99a7cf;opacity:.5"></i>magnetopausa media (10 R⊕)</span><span><i style="background:#ff7a00"></i>onda d'urto (indicativa)</span><span><i style="background:#ffe14d"></i>orbita geostazionaria (6,6 R⊕)</span></div>
+      </div>
+      <div>
+        <canvas id="aurora-canvas" class="map" width="640" height="420" style="cursor:default"></canvas>
+        <div class="legend" id="aurora-legend"><span>Ovale aurorale previsto (NOAA OVATION), polo nord a sinistra e sud a destra. ● = Udine.</span></div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:18px">
+      <div><div class="chart"><canvas id="c-sw"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-bz"></canvas></div></div>
+    </div>
+    <div class="chart" style="margin-top:18px;height:240px"><canvas id="c-dst"></canvas></div>
+    <div class="insights" id="ins-mag"></div>
+  </section>
+
+  <section id="s-campo">
+    <h2>🧲 Il campo magnetico dal 1900</h2>
+    <p class="sub">Dal modello internazionale IGRF-14 (termine di dipolo, quello che descrive la Terra come una grande calamita). Il campo si sta indebolendo di circa il 6% per secolo e il suo polo si sposta. Il polo nord <i>magnetico</i> vero (dove l'ago della bussola punta in verticale) corre ancora più veloce: dal Canada artico verso la Siberia, fino a ~50 km l'anno nei primi anni 2000.</p>
+    <div class="grid2">
+      <div><div class="chart"><canvas id="c-dipole"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-gpole"></canvas></div></div>
+    </div>
+    <div class="insights" id="ins-campo"></div>
+  </section>
+
+  <section id="s-grav">
+    <h2>⚖️ Dove c'è più o meno gravità</h2>
+    <p class="sub">La gravità non è uguale ovunque: la Terra è schiacciata ai poli e ruota, quindi all'equatore si è più lontani dal centro e la forza centrifuga "alleggerisce". Salendo di quota cala ancora. Il calcolo usa la gravità normale dell'ellissoide WGS84 (formula di Somigliana) più la correzione per la quota. <b>Clicca sulla mappa</b> per scegliere un punto.</p>
+    <canvas id="g-map" class="map" width="1200" height="560"></canvas>
+    <div class="legend" id="g-legend"></div>
+    <div class="calc">
+      <label>Luogo<select id="g-place"></select></label>
+      <label>Latitudine °<input id="g-lat" type="number" step="0.01" min="-90" max="90" value="46.06"></label>
+      <label>Quota m<input id="g-alt" type="number" step="1" value="113"></label>
+      <label>Il tuo peso kg<input id="g-kg" type="number" step="0.1" value="70"></label>
+      <output id="g-out"></output>
+    </div>
+    <div class="tablewrap"><table id="g-table"><thead><tr><th>Luogo</th><th class="num">Lat</th><th class="num">Quota</th><th class="num">g (m/s²)</th><th class="num">70 kg segnano</th><th>Perché</th></tr></thead><tbody></tbody></table></div>
+    <h3>Le anomalie: dove la Terra è "più pesante" o "più leggera" del previsto</h3>
+    <p class="sub">Oltre alla forma, conta cosa c'è sotto: rocce dense o leggere, catene montuose, mantello caldo. I satelliti GRACE e GOCE le hanno misurate con precisione. Il <b>geoide</b> è la superficie che avrebbe il mare in quiete seguendo solo la gravità: dove la gravità è più forte si alza, dove è più debole si abbassa. I simboli ▲▼ sulla mappa sono le anomalie più famose.</p>
+    <div class="tablewrap"><table id="anom-table"><thead><tr><th>Zona</th><th>Anomalia</th><th>Causa</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+
+<footer>
+  Dati: rotazione e polo <a href="https://www.iers.org/" target="_blank" rel="noopener">IERS</a> via <a href="https://celestrak.org/SpaceData/" target="_blank" rel="noopener">CelesTrak EOP</a> ·
+  vento solare, Dst, Kp, aurora <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener">NOAA SWPC</a> ·
+  campo magnetico <a href="https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field" target="_blank" rel="noopener">IGRF-14</a> ·
+  gravità normale WGS84 · obliquità IAU 2006 e Laskar 1986 ·
+  <a href="radiazione.html">Radiazione spaziale</a> · <a href="./">SismoGlobe</a>
+</footer>
+
+<script>
+const EOP_URL = 'https://celestrak.org/SpaceData/EOP-All.csv';
+const SWPC = 'https://services.swpc.noaa.gov';
+const LAND_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json';
+const UDINE = { lat: 46.06, lon: 13.24 };
+const ARCSEC_M = 30.87; // 1" sul polo ≈ 30,87 m sulla superficie
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = { ok: css('--ok'), warn: css('--warn'), orange: css('--orange'), red: css('--red'), pink: css('--pink'),
+            violet: css('--violet'), cyan: css('--cyan'), accent: css('--accent'), dim: css('--dim'), text: css('--text') };
+Chart.defaults.color = C.dim;
+Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+Chart.defaults.animation = false;
+Chart.defaults.maintainAspectRatio = false;
+
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v == null || !isFinite(v) ? '–' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: d, minimumFractionDigits: d });
+const fmtDate = s => new Date(s).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+const hhmm = t => new Date(t).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const xCat = (max = 8) => ({ ticks: { maxTicksLimit: max, maxRotation: 0, autoSkip: true }, grid: { display: false } });
+const deg = Math.PI / 180;
+const charts = {};
+function chart(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); return charts[id]; }
+async function getJSON(url) { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(url + ' → ' + r.status); return r.json(); }
+function fail(id, msg) { const el = $(id); if (el) el.insertAdjacentHTML('beforebegin', `<p class="err">⚠ ${msg}</p>`); }
+
+// Linee orizzontali di riferimento
+Chart.register({
+  id: 'thresholds',
+  afterDatasetsDraw(chart, _a, opts) {
+    const lines = opts && opts.lines; if (!lines) return;
+    const { ctx, chartArea: a } = chart;
+    for (const l of lines) {
+      const sc = chart.scales[l.axis || 'y']; if (!sc) continue;
+      const y = sc.getPixelForValue(l.value); if (y < a.top || y > a.bottom) continue;
+      ctx.save(); ctx.strokeStyle = l.color; ctx.setLineDash([4, 4]); ctx.globalAlpha = .7;
+      ctx.beginPath(); ctx.moveTo(a.left, y); ctx.lineTo(a.right, y); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = .9; ctx.fillStyle = l.color; ctx.font = '11px system-ui';
+      ctx.fillText(l.label, a.right - ctx.measureText(l.label).width - 4, y - 4); ctx.restore();
+    }
+  },
+});
+
+const nowCards = {};
+function setCard(key, lab, val, color, note) {
+  nowCards[key] = { lab, val, color, note };
+  const order = ['lod', 'ut1', 'pole', 'obl', 'mp', 'sw', 'bz', 'dst', 'kp', 'gpole'];
+  $('now').innerHTML = order.filter(k => nowCards[k]).map(k => { const c = nowCards[k];
+    return `<div class="card"><div class="lab">${c.lab}</div><div class="val" style="color:${c.color || C.text}">${c.val}</div><div class="note">${c.note}</div></div>`; }).join('');
+}
+function insights(id, list) {
+  $(id).innerHTML = list.filter(Boolean).map(([b, s]) => `<div class="insight"><b>${b}</b><br><span>${s}</span></div>`).join('');
+}
+
+// ───────────────────────── ROTAZIONE E POLO (IERS EOP) ─────────────────────────
+function parseEOP(text) {
+  const rows = [];
+  const lines = text.trim().split(/\r?\n/);
+  for (let i = 1; i < lines.length; i++) {
+    const p = lines[i].split(',');
+    if (p.length < 12) continue;
+    rows.push({ date: p[0], x: +p[2], y: +p[3], ut1: +p[4], lod: +p[5] * 1000, dat: +p[10], obs: p[11].trim() === 'O' });
+  }
+  return rows;
+}
+const meanBy = (rows, keyFn, valFn) => {
+  const m = new Map();
+  for (const r of rows) { const k = keyFn(r), v = valFn(r); if (!isFinite(v)) continue;
+    const e = m.get(k) || { s: 0, n: 0, r }; e.s += v; e.n++; m.set(k, e); }
+  return [...m.entries()].map(([k, e]) => ({ k, v: e.s / e.n, n: e.n }));
+};
+
+function renderRotation(all) {
+  const obs = all.filter(r => r.obs);
+  const pred = all.filter(r => !r.obs);
+  const last = obs[obs.length - 1];
+
+  // LOD intero periodo: medie mensili + media annuale mobile
+  const monthly = meanBy(obs, r => r.date.slice(0, 7), r => r.lod);
+  const yearly = monthly.map((m, i) => { if (i < 6 || i > monthly.length - 7) return null;
+    let s = 0; for (let k = -6; k <= 6; k++) s += monthly[i + k].v * (Math.abs(k) === 6 ? .5 : 1); return s / 12; });
+  chart('c-lod-all', {
+    type: 'line',
+    data: { labels: monthly.map(m => m.k), datasets: [
+      { label: 'Media mensile', data: monthly.map(m => m.v), borderColor: 'rgba(90,130,255,.55)', pointRadius: 0, borderWidth: 1 },
+      { label: 'Media su 12 mesi (tendenza)', data: yearly, borderColor: C.warn, pointRadius: 0, borderWidth: 2.2, spanGaps: false },
+    ] },
+    options: { plugins: { title: { display: true, text: 'Durata del giorno oltre le 86 400 s, dal 1962 (ms)' },
+      thresholds: { lines: [{ value: 0, label: '24 h esatte', color: C.dim }] } },
+      scales: { x: { ticks: { maxTicksLimit: 14, maxRotation: 0, callback(v) { return this.getLabelForValue(v).slice(0, 4); } }, grid: { display: false } },
+                y: { title: { display: true, text: 'ms' } } } },
+  });
+
+  // Ultimi 3 anni giorno per giorno + previsione
+  const cut = new Date(Date.now() - 3 * 365.25 * 864e5).toISOString().slice(0, 10);
+  const recent = all.filter(r => r.date >= cut && (r.obs || r.date <= new Date(Date.now() + 120 * 864e5).toISOString().slice(0, 10)));
+  chart('c-lod-recent', {
+    type: 'line',
+    data: { labels: recent.map(r => r.date), datasets: [
+      { label: 'Misurato', data: recent.map(r => r.obs ? r.lod : null), borderColor: C.cyan, pointRadius: 0, borderWidth: 1.3 },
+      { label: 'Previsto IERS', data: recent.map(r => r.obs ? null : r.lod), borderColor: C.dim, borderDash: [4, 3], pointRadius: 0, borderWidth: 1.3 },
+    ] },
+    options: { plugins: { title: { display: true, text: 'Ultimi 3 anni, giorno per giorno (ms)' },
+      thresholds: { lines: [{ value: 0, label: '24 h', color: C.dim }] } },
+      scales: { x: { ticks: { maxTicksLimit: 7, maxRotation: 0, callback(v) { const l = this.getLabelForValue(v); return l.slice(5, 7) + '/' + l.slice(2, 4); } }, grid: { display: false } } } },
+  });
+
+  // UT1-UTC dal 1972 con secondi intercalari
+  const from72 = obs.filter(r => r.date >= '1972-01-01');
+  const step = Math.max(1, Math.floor(from72.length / 1500));
+  const s72 = from72.filter((_, i) => i % step === 0);
+  const leaps = []; for (let i = 1; i < obs.length; i++) if (obs[i].dat !== obs[i - 1].dat && obs[i].date >= '1972-01-01') leaps.push(obs[i].date);
+  chart('c-ut1', {
+    type: 'line',
+    data: { labels: s72.map(r => r.date), datasets: [
+      { label: 'UT1 − UTC (s)', data: s72.map(r => r.ut1), borderColor: C.violet, pointRadius: 0, borderWidth: 1.4, stepped: false },
+    ] },
+    options: { plugins: { title: { display: true, text: `Orologio "Terra" meno orologio atomico — ogni salto è un secondo intercalare (${leaps.length})` }, legend: { display: false } },
+      scales: { x: { ticks: { maxTicksLimit: 8, maxRotation: 0, callback(v) { return this.getLabelForValue(v).slice(0, 4); } }, grid: { display: false } },
+                y: { min: -1, max: 1, title: { display: true, text: 's' } } } },
+  });
+
+  // Statistiche
+  const last365 = obs.slice(-365);
+  const avg365 = last365.reduce((s, r) => s + r.lod, 0) / last365.length;
+  const shortest = obs.reduce((a, r) => r.lod < a.lod ? r : a);
+  const longest = obs.filter(r => r.date >= '1972').reduce((a, r) => r.lod > a.lod ? r : a);
+  const sinceShort = obs.filter(r => r.date >= '2020-01-01').sort((a, b) => a.lod - b.lod).slice(0, 1)[0];
+  let ymin = { v: Infinity }, ymax = { v: -Infinity };
+  monthly.forEach((m, i) => { const y = yearly[i]; if (y == null) return; if (y < ymin.v) ymin = { v: y, k: m.k }; if (y > ymax.v) ymax = { v: y, k: m.k }; });
+  const lastLeap = leaps[leaps.length - 1];
+  const nextPred = pred[pred.length - 1];
+  const drift = nextPred ? nextPred.ut1 - last.ut1 : null;
+  const yrsTo09 = drift && drift < 0 ? (0.9 + last.ut1) / (-drift / ((Date.parse(nextPred.date) - Date.parse(last.date)) / 3.15576e10)) : null;
+
+  setCard('lod', 'Durata del giorno', `${last.lod >= 0 ? '+' : ''}${fmt(last.lod, 2)} <small>ms</small>`, last.lod < 0 ? C.cyan : C.text,
+    `oltre le 24 h · ${fmtDate(last.date)} · media 12 mesi ${avg365 >= 0 ? '+' : ''}${fmt(avg365, 2)} ms`);
+  setCard('ut1', 'UT1 − UTC', `${fmt(last.ut1 * 1000, 0)} <small>ms</small>`, Math.abs(last.ut1) > .6 ? C.warn : C.text,
+    `ritardo della Terra sull'orologio atomico · secondo intercalare se si supera ±0,9 s`);
+
+  insights('ins-rot', [
+    ['Il giorno più corto mai misurato', `${fmtDate(shortest.date)}: ${fmt(shortest.lod, 3)} ms rispetto alle 24 h esatte. La Terra ha girato più veloce di qualunque altro giorno dal 1962.`],
+    ['Il giorno più lungo dal 1972', `${fmtDate(longest.date)}: +${fmt(longest.lod, 2)} ms.`],
+    ['Tendenza su 12 mesi', `Massimo ${ymax.k?.slice(0, 4)} (+${fmt(ymax.v, 2)} ms), minimo ${ymin.k?.slice(0, 4)} (${fmt(ymin.v, 2)} ms). Le maree lunari allungano il giorno di ~2,3 ms al secolo, ma il nucleo liquido e lo scioglimento dei ghiacci si sovrappongono e per decenni possono invertire la tendenza.`],
+    ['Secondi intercalari', `${leaps.length} aggiunti dal 1972, l'ultimo il ${fmtDate(lastLeap)}. Dal 2035 verranno aboliti (decisione CGPM 2022): lo scarto potrà crescere oltre il secondo.`],
+    drift != null && ['Dove va adesso', drift < 0 ? `Secondo la previsione IERS UT1−UTC scende di ${fmt(-drift * 1000, 0)} ms nei prossimi mesi: la Terra è tornata a rallentare rispetto agli anni 2020-2022, quando si parlava di un secondo intercalare "negativo".` : `Secondo la previsione IERS UT1−UTC sale di ${fmt(drift * 1000, 0)} ms nei prossimi mesi: la Terra sta girando più veloce dell'orologio atomico.`],
+    ['Anche i terremoti contano', 'Il sisma di Tōhoku (M9.1, 2011) ha accorciato il giorno di circa 1,8 microsecondi e spostato l\'asse di figura di ~17 cm, secondo i calcoli NASA-JPL: massa spostata verso il centro della Terra, come una pattinatrice che chiude le braccia.'],
+  ]);
+  return { last };
+}
+
+function renderPole(all) {
+  const obs = all.filter(r => r.obs);
+  const last = obs[obs.length - 1];
+  // Spirale ultimi 6,4 anni (battimento Chandler + annuale)
+  const cut = new Date(Date.now() - 6.4 * 365.25 * 864e5).toISOString().slice(0, 10);
+  const spiral = obs.filter(r => r.date >= cut).filter((_, i) => i % 3 === 0);
+  const toM = r => ({ x: r.x * ARCSEC_M, y: r.y * ARCSEC_M });
+  const mx = spiral.reduce((s, r) => s + r.x, 0) / spiral.length, my = spiral.reduce((s, r) => s + r.y, 0) / spiral.length;
+  chart('c-pole', {
+    type: 'scatter',
+    data: { datasets: [
+      { label: 'Traccia del polo (ultimi 6 anni)', data: spiral.map(toM), showLine: true, borderColor: 'rgba(77,216,255,.55)', borderWidth: 1.2, pointRadius: 0 },
+      { label: 'Oggi', data: [toM(last)], pointRadius: 6, pointBackgroundColor: C.warn, borderColor: C.warn },
+      { label: 'Centro medio', data: [{ x: mx * ARCSEC_M, y: my * ARCSEC_M }], pointRadius: 5, pointStyle: 'crossRot', borderColor: C.dim, borderWidth: 2 },
+    ] },
+    options: { aspectRatio: 1, plugins: { title: { display: true, text: 'Dove buca la crosta l\'asse di rotazione (metri dal polo di riferimento)' },
+      tooltip: { callbacks: { label: c => `x ${fmt(c.parsed.x, 2)} m · y ${fmt(c.parsed.y, 2)} m` } } },
+      scales: { x: { title: { display: true, text: 'x → verso Greenwich (m)' } }, y: { title: { display: true, text: 'y → verso 90° Ovest (m)' } } } },
+  });
+  // Deriva lenta: medie su blocchi di 6 anni (≈ battimento Chandler/annuale, così la spirale si annulla)
+  const blk = r => String(1962 + Math.floor((+r.date.slice(0, 4) - 1962) / 6) * 6);
+  const bx = meanBy(obs, blk, r => r.x), by = new Map(meanBy(obs, blk, r => r.y).map(e => [e.k, e.v]));
+  const drift = bx.filter(e => e.n > 6 * 300).map(e => ({ x: e.v * ARCSEC_M, y: by.get(e.k) * ARCSEC_M, yr: `${e.k}–${+e.k + 5}` }));
+  chart('c-pole-drift', {
+    type: 'scatter',
+    data: { datasets: [{ label: 'Polo medio di ogni anno', data: drift, showLine: true, borderColor: C.orange, backgroundColor: C.orange, pointRadius: 4, borderWidth: 1.6 }] },
+    options: { aspectRatio: 1, plugins: { title: { display: true, text: 'Deriva lenta del polo dal 1962 (media ogni 6 anni, metri)' },
+      tooltip: { callbacks: { label: c => `${c.raw.yr}: x ${fmt(c.parsed.x, 1)} m, y ${fmt(c.parsed.y, 1)} m` } } },
+      scales: { x: { title: { display: true, text: 'x → verso Greenwich (m)' } }, y: { title: { display: true, text: 'y → verso 90° Ovest (m)' } } } },
+  });
+  const d0 = drift[0], d1 = drift[drift.length - 1];
+  const dist = Math.hypot(d1.x - d0.x, d1.y - d0.y);
+  const years = (parseInt(d1.yr) - parseInt(d0.yr));
+  const dirLon = Math.atan2(d1.y - d0.y, d1.x - d0.x) / deg; // y positivo = longitudine ovest
+  // Ampiezza della spirale nell'ultimo anno (distanza media dal centro)
+  const lastYear = obs.slice(-365);
+  const cx = lastYear.reduce((s, r) => s + r.x, 0) / lastYear.length, cy = lastYear.reduce((s, r) => s + r.y, 0) / lastYear.length;
+  const amp = lastYear.reduce((s, r) => s + Math.hypot(r.x - cx, r.y - cy), 0) / lastYear.length * ARCSEC_M;
+  const old = obs.filter(r => r.date >= '2010-01-01' && r.date < '2011-01-01');
+  const ox = old.reduce((s, r) => s + r.x, 0) / old.length, oy = old.reduce((s, r) => s + r.y, 0) / old.length;
+  const ampOld = old.reduce((s, r) => s + Math.hypot(r.x - ox, r.y - oy), 0) / old.length * ARCSEC_M;
+  const distNow = Math.hypot(last.x, last.y) * ARCSEC_M;
+  setCard('pole', 'Spostamento del polo', `${fmt(distNow, 1)} <small>m</small>`, C.text, `dal polo di riferimento IERS · ${fmtDate(last.date)}`);
+  return { dist, years, from: parseInt(d0.yr) + 3, dirLon, amp, ampOld };
+}
+
+// ───────────────────────── OBLIQUITÀ ─────────────────────────
+function jcent(date) { return (date.getTime() / 864e5 + 2440587.5 - 2451545.0) / 36525; }
+function oblMean(T) { // IAU 2006, arcsec
+  return 84381.406 - 46.836769 * T - 0.0001831 * T * T + 0.00200340 * T ** 3 - 5.76e-7 * T ** 4 - 4.34e-8 * T ** 5; }
+function nutObl(T) { // termini principali della nutazione in obliquità, arcsec
+  const Om = (125.04452 - 1934.136261 * T) * deg, L = (280.4665 + 36000.7698 * T) * deg, Lp = (218.3165 + 481267.8813 * T) * deg;
+  return 9.20 * Math.cos(Om) + 0.57 * Math.cos(2 * L) + 0.10 * Math.cos(2 * Lp) - 0.09 * Math.cos(2 * Om); }
+function oblLaskar(yearsFrom2000) { // Laskar 1986, valida ±10 000 anni, arcsec
+  const U = yearsFrom2000 / 10000;
+  const c = [84381.448, -4680.93, -1.55, 1999.25, -51.38, -249.67, -39.05, 7.12, 27.87, 5.79, 2.45];
+  return c.reduce((s, k, i) => s + k * U ** i, 0); }
+const dms = a => { const d = Math.floor(a), m = (a - d) * 60, s = (m - Math.floor(m)) * 60; return `${d}° ${String(Math.floor(m)).padStart(2, '0')}′ ${s.toFixed(1)}″`; };
+
+function renderObliquity() {
+  const now = new Date();
+  const T = jcent(now);
+  const eps = (oblMean(T) + nutObl(T)) / 3600;
+  setCard('obl', 'Inclinazione dell\'asse', `${fmt(eps, 4)}°`, C.text, `${dms(eps)} · nutazione ${nutObl(T) >= 0 ? '+' : ''}${fmt(nutObl(T), 1)}″`);
+  const lab = [], mean = [], tru = [];
+  const y0 = now.getUTCFullYear() - 10;
+  for (let m = 0; m <= 12 * 20; m += 1) {
+    const d = new Date(Date.UTC(y0, m, 1)); const t = jcent(d);
+    lab.push(d.toISOString().slice(0, 7)); mean.push(oblMean(t) / 3600); tru.push((oblMean(t) + nutObl(t)) / 3600);
+  }
+  const iNow = lab.indexOf(now.toISOString().slice(0, 7));
+  chart('c-obl-short', {
+    type: 'line',
+    data: { labels: lab, datasets: [
+      { label: 'Inclinazione vera (con nutazione)', data: tru, borderColor: C.cyan, pointRadius: tru.map((_, i) => i === iNow ? 5 : 0), pointBackgroundColor: C.warn, borderWidth: 1.5 },
+      { label: 'Inclinazione media', data: mean, borderColor: C.dim, borderDash: [4, 3], pointRadius: 0, borderWidth: 1.2 },
+    ] },
+    options: { plugins: { title: { display: true, text: `Inclinazione ${y0}–${y0 + 20}: l'oscillazione di 18,6 anni (nutazione, dovuta alla Luna)` },
+      tooltip: { callbacks: { label: c => `${c.dataset.label}: ${dms(c.parsed.y)}` } } },
+      scales: { x: { ticks: { maxTicksLimit: 6, maxRotation: 0, callback(v) { return this.getLabelForValue(v).slice(0, 4); } }, grid: { display: false } },
+                y: { ticks: { callback: v => v.toFixed(3) + '°' } } } },
+  });
+  const L2 = [], V2 = [];
+  for (let y = -10000; y <= 10000; y += 100) { L2.push(2000 + y); V2.push(oblLaskar(y) / 3600); }
+  chart('c-obl-long', {
+    type: 'line',
+    data: { labels: L2, datasets: [{ label: 'Inclinazione media', data: V2, borderColor: C.violet, pointRadius: L2.map(y => Math.abs(y - now.getUTCFullYear()) < 50 ? 5 : 0), pointBackgroundColor: C.warn, borderWidth: 1.8 }] },
+    options: { plugins: { title: { display: true, text: 'Dall\'8000 a.C. al 12 000 d.C.: il ciclo di 41 000 anni (Laskar 1986)' }, legend: { display: false },
+      tooltip: { callbacks: { title: c => { const y = +c[0].label; return y <= 0 ? `${1 - y} a.C.` : `${y} d.C.`; }, label: c => dms(c.parsed.y) } } },
+      scales: { x: { ticks: { maxTicksLimit: 9, maxRotation: 0, callback(v) { const y = +this.getLabelForValue(v); return y <= 0 ? (1 - y) + ' a.C.' : y; } }, grid: { display: false } },
+                y: { ticks: { callback: v => v.toFixed(1) + '°' } } } },
+  });
+  const rate = (oblMean(T + 1) - oblMean(T)); // arcsec al secolo
+  return { eps, rate };
+}
+
+// ───────────────────────── MAGNETOSFERA (NOAA SWPC) ─────────────────────────
+function shue(bz, pdyn) {
+  const r0 = (10.22 + 1.29 * Math.tanh(0.184 * (bz + 8.14))) * Math.pow(pdyn, -1 / 6.6);
+  const a = (0.58 - 0.007 * bz) * (1 + 0.024 * Math.log(pdyn));
+  return { r0, a, r: th => r0 * Math.pow(2 / (1 + Math.cos(th)), a) };
+}
+function drawMagnetosphere(bz, pdyn, speed) {
+  const cv = $('mp-canvas'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const ex = W * 0.42, ey = H / 2, s = 15; // pixel per raggio terrestre
+  // vento solare: linee che arrivano da sinistra
+  ctx.strokeStyle = 'rgba(255,225,77,.18)'; ctx.lineWidth = 1;
+  for (let y = 20; y < H; y += 26) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(60, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(52, y - 4); ctx.lineTo(60, y); ctx.lineTo(52, y + 4); ctx.stroke(); }
+  ctx.fillStyle = C.warn; ctx.font = '12px system-ui'; ctx.fillText(`☀ vento solare ${fmt(speed, 0)} km/s`, 8, 16);
+  const curve = (fn, color, dash, w = 2) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.beginPath();
+    for (let t = -150; t <= 150; t += 2) { const th = t * deg, r = fn(th);
+      const x = ex - r * Math.cos(th) * s, y = ey - r * Math.sin(th) * s; t === -150 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke(); ctx.restore(); };
+  const nominal = shue(0, 2);
+  const m = shue(bz, pdyn);
+  // linee di campo stilizzate (dipolo) fino alla magnetopausa
+  ctx.strokeStyle = 'rgba(90,130,255,.25)'; ctx.lineWidth = 1;
+  for (const L of [2, 3, 4.5, 6, 8]) { ctx.beginPath();
+    for (let la = -80; la <= 80; la += 2) { const r = L * Math.cos(la * deg) ** 2; const x = ex - r * Math.cos(la * deg) * s, y = ey - r * Math.sin(la * deg) * s; la === -80 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke(); ctx.beginPath();
+    for (let la = -80; la <= 80; la += 2) { const r = L * Math.cos(la * deg) ** 2 * 1.4; const x = ex + r * Math.cos(la * deg) * s, y = ey - r * Math.sin(la * deg) * s; la === -80 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke(); }
+  curve(th => m.r(th) * 1.32, C.orange, [6, 4], 1.5);
+  curve(nominal.r, 'rgba(153,167,207,.45)', [3, 4], 1.5);
+  curve(m.r, C.cyan, null, 2.5);
+  // orbita geostazionaria
+  ctx.save(); ctx.strokeStyle = C.warn; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.arc(ex, ey, 6.6 * s, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
+  // Terra
+  const g = ctx.createRadialGradient(ex - 4, ey - 4, 2, ex, ey, s);
+  g.addColorStop(0, '#7fb3ff'); g.addColorStop(1, '#1d3d8f'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ex, ey, s, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.arc(ex, ey, s, -Math.PI / 2, Math.PI / 2); ctx.fill();
+  // etichetta distanza al naso
+  const nx = ex - m.r0 * s;
+  ctx.fillStyle = C.cyan; ctx.font = 'bold 13px system-ui';
+  ctx.fillText(`${fmt(m.r0, 1)} R⊕`, nx - 58, ey - 8);
+  ctx.fillStyle = C.dim; ctx.font = '11px system-ui';
+  ctx.fillText(`≈ ${Math.round(m.r0 * 6371).toLocaleString('it-IT')} km`, nx - 58, ey + 8);
+  ctx.fillText(`Bz ${bz >= 0 ? '+' : ''}${fmt(bz, 1)} nT · pressione ${fmt(pdyn, 2)} nPa`, 8, H - 10);
+  ctx.textAlign = 'right'; ctx.fillText('coda magnetica →', W - 8, ey + 4); ctx.textAlign = 'left';
+  return m;
+}
+
+let land = null;
+async function loadLand() {
+  if (land) return land;
+  const topo = await getJSON(LAND_URL);
+  land = topojson.feature(topo, topo.objects.land);
+  return land;
+}
+function eachRing(fc, fn) {
+  for (const f of fc.features) { const g = f.geometry; const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    for (const p of polys) for (const ring of p) fn(ring); }
+}
+
+function drawAurora(ov) {
+  const cv = $('aurora-canvas'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const R = Math.min(W / 4, H / 2) - 14;
+  const hemis = [{ cx: W / 4, cy: H / 2, north: true }, { cx: 3 * W / 4, cy: H / 2, north: false }];
+  const grid = new Float32Array(360 * 181);
+  for (const [lon, lat, v] of ov.coordinates) grid[lon * 181 + (lat + 90)] = v;
+  for (const h of hemis) {
+    const proj = (lon, lat) => { const colat = h.north ? 90 - lat : 90 + lat; const r = colat / 50 * R;
+      const a = (h.north ? lon : -lon) * deg; return [h.cx + r * Math.sin(a), h.cy + (h.north ? 1 : -1) * r * Math.cos(a)]; };
+    ctx.save(); ctx.beginPath(); ctx.arc(h.cx, h.cy, R, 0, 2 * Math.PI); ctx.fillStyle = '#0a1024'; ctx.fill(); ctx.clip();
+    if (land) { ctx.fillStyle = 'rgba(120,140,190,.22)'; ctx.strokeStyle = 'rgba(160,180,230,.35)'; ctx.lineWidth = .7;
+      eachRing(land, ring => { if (!ring.some(([, la]) => h.north ? la > 38 : la < -38)) return; ctx.beginPath();
+        ring.forEach(([lo, la], i) => { const la2 = h.north ? Math.max(la, 35) : Math.min(la, -35); const [x, y] = proj(lo, la2); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+        ctx.closePath(); ctx.fill(); ctx.stroke(); }); }
+    // aurora
+    for (let lon = 0; lon < 360; lon++) for (let lat = h.north ? 40 : -90; lat <= (h.north ? 90 : -40); lat++) {
+      const v = grid[lon * 181 + (lat + 90)]; if (v < 3) continue;
+      const [x, y] = proj(lon, lat); const a = Math.min(1, v / 40);
+      ctx.fillStyle = v >= 50 ? `rgba(255,59,48,${a})` : v >= 25 ? `rgba(255,225,77,${a})` : `rgba(104,224,127,${a * .9})`;
+      ctx.fillRect(x - 2.2, y - 2.2, 4.4, 4.4);
+    }
+    // cerchi di latitudine
+    ctx.strokeStyle = 'rgba(153,167,207,.25)'; ctx.setLineDash([2, 4]);
+    for (const la of [50, 60, 70, 80]) { ctx.beginPath(); ctx.arc(h.cx, h.cy, (90 - la) / 50 * R, 0, 2 * Math.PI); ctx.stroke(); }
+    ctx.setLineDash([]);
+    if (h.north) { const [ux, uy] = proj(UDINE.lon, UDINE.lat); ctx.fillStyle = C.cyan; ctx.beginPath(); ctx.arc(ux, uy, 4, 0, 2 * Math.PI); ctx.fill();
+      ctx.font = '11px system-ui'; ctx.fillText('Udine', ux + 6, uy + 4); }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(90,130,255,.4)'; ctx.beginPath(); ctx.arc(h.cx, h.cy, R, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillStyle = C.dim; ctx.font = '12px system-ui'; ctx.fillText(h.north ? 'Polo Nord' : 'Polo Sud', h.cx - 26, 14);
+  }
+  // confine più a sud dell'aurora sopra l'Europa (lon 0-30)
+  let southEU = 90;
+  for (let lon = 0; lon <= 30; lon++) for (let lat = 40; lat <= 90; lat++) if (grid[lon * 181 + lat + 90] >= 10 && lat < southEU) southEU = lat;
+  ctx.fillStyle = C.dim; ctx.font = '11px system-ui';
+  ctx.fillText(`osservazione ${hhmm(ov['Observation Time'])} · previsione ${hhmm(ov['Forecast Time'])}`, 8, H - 8);
+  return { southEU };
+}
+
+async function loadMagnetosphere() {
+  const res = await Promise.allSettled([
+    getJSON(SWPC + '/json/rtsw/rtsw_wind_1m.json'), getJSON(SWPC + '/json/rtsw/rtsw_mag_1m.json'),
+    getJSON(SWPC + '/products/kyoto-dst.json'), getJSON(SWPC + '/products/noaa-planetary-k-index.json'),
+    getJSON(SWPC + '/json/ovation_aurora_latest.json'), loadLand().catch(() => null),
+  ]);
+  const [wR, mR, dR, kR, oR] = res;
+  const ins = [];
+  let swNow = null, bzNow = null, pdyn = null;
+  if (wR.status === 'fulfilled' && mR.status === 'fulfilled') {
+    const pick = arr => arr.filter(r => r.active).sort((a, b) => a.time_tag < b.time_tag ? -1 : 1);
+    const w = pick(wR.value), m = pick(mR.value);
+    // medie su 10 minuti
+    const bin = (arr, f) => { const out = new Map(); for (const r of arr) { const v = f(r); if (v == null || !isFinite(v)) continue;
+      const k = r.time_tag.slice(0, 15) + '0'; const e = out.get(k) || [0, 0]; e[0] += v; e[1]++; out.set(k, e); }
+      return new Map([...out].map(([k, [s, n]]) => [k, s / n])); };
+    const sp = bin(w, r => r.proton_speed), dn = bin(w, r => r.proton_density), bz = bin(m, r => r.bz_gsm), bt = bin(m, r => r.bt);
+    const keys = [...new Set([...sp.keys(), ...bz.keys()])].sort();
+    const L = keys.map(k => k + ':00Z');
+    chart('c-sw', {
+      type: 'line',
+      data: { labels: L.map(hhmm), datasets: [
+        { label: 'Velocità (km/s)', data: keys.map(k => sp.get(k) ?? null), borderColor: C.accent, pointRadius: 0, borderWidth: 1.5, spanGaps: true, yAxisID: 'y' },
+        { label: 'Densità (p/cm³)', data: keys.map(k => dn.get(k) ?? null), borderColor: C.ok, pointRadius: 0, borderWidth: 1.2, spanGaps: true, yAxisID: 'y2' },
+      ] },
+      options: { plugins: { title: { display: true, text: 'Vento solare in L1, ultime 24 ore' } },
+        scales: { x: xCat(6), y: { title: { display: true, text: 'km/s' } }, y2: { position: 'right', title: { display: true, text: 'p/cm³' }, grid: { drawOnChartArea: false } } } },
+    });
+    chart('c-bz', {
+      type: 'line',
+      data: { labels: L.map(hhmm), datasets: [
+        { label: 'Bz (nT)', data: keys.map(k => bz.get(k) ?? null), borderColor: C.pink, pointRadius: 0, borderWidth: 1.5, spanGaps: true,
+          fill: { target: 'origin', above: 'rgba(104,224,127,.10)', below: 'rgba(255,45,120,.18)' } },
+        { label: 'Bt intensità totale (nT)', data: keys.map(k => bt.get(k) ?? null), borderColor: C.dim, pointRadius: 0, borderWidth: 1, spanGaps: true },
+      ] },
+      options: { plugins: { title: { display: true, text: 'Campo magnetico del vento solare — Bz negativo apre la porta alle tempeste' },
+        thresholds: { lines: [{ value: -10, label: 'Bz −10: tempesta probabile', color: C.orange }] } },
+        scales: { x: xCat(6) } },
+    });
+    // valori attuali: media degli ultimi 30 minuti disponibili
+    const lastN = (map, n = 3) => { const v = [...map.values()].slice(-n); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
+    swNow = lastN(sp); bzNow = lastN(bz); const dNow = lastN(dn);
+    pdyn = 1.6726e-6 * dNow * swNow * swNow;
+    if (swNow && pdyn) {
+      const mp = drawMagnetosphere(bzNow, pdyn, swNow);
+      setCard('mp', 'Scudo magnetico (naso)', `${fmt(mp.r0, 1)} <small>R⊕</small>`, mp.r0 < 6.6 ? C.pink : mp.r0 < 8 ? C.orange : C.ok,
+        `${Math.round(mp.r0 * 6371).toLocaleString('it-IT')} km dal centro della Terra · normale ~10 R⊕`);
+      ins.push(['Quanto è compresso lo scudo', mp.r0 < 6.6 ? `La magnetopausa è a ${fmt(mp.r0, 1)} raggi terrestri: dentro l'orbita geostazionaria! I satelliti a 36 000 km sono esposti direttamente al vento solare.`
+        : `La magnetopausa è a ${fmt(mp.r0, 1)} raggi terrestri (${Math.round(mp.r0 * 6371).toLocaleString('it-IT')} km), ${mp.r0 < 9 ? 'più compressa del normale' : 'in posizione tranquilla'}. Scende sotto 6,6 R⊕ (l'orbita dei satelliti geostazionari) solo nelle tempeste forti.`]);
+    }
+    setCard('sw', 'Vento solare', `${fmt(swNow, 0)} <small>km/s</small>`, swNow >= 600 ? C.orange : swNow >= 500 ? C.warn : C.ok, `densità ${fmt(dNow, 1)} p/cm³ · pressione ${fmt(pdyn, 2)} nPa`);
+    setCard('bz', 'Bz del vento solare', `${bzNow >= 0 ? '+' : ''}${fmt(bzNow, 1)} <small>nT</small>`, bzNow <= -10 ? C.pink : bzNow <= -5 ? C.orange : bzNow < 0 ? C.warn : C.ok,
+      bzNow < 0 ? 'verso sud: lo scudo si "apre"' : 'verso nord: scudo chiuso');
+    const lastTs = keys[keys.length - 1];
+    $('updated').textContent = 'vento solare ' + hhmm(lastTs + ':00Z');
+  } else fail('c-sw', 'Dati del vento solare NOAA non disponibili in questo momento.');
+
+  if (dR.status === 'fulfilled' && kR.status === 'fulfilled') {
+    const dst = dR.value.filter(r => r.dst != null), kp = kR.value;
+    const times = [...new Set([...dst.map(r => r.time_tag.slice(0, 13)), ...kp.map(r => r.time_tag.slice(0, 13))])].sort();
+    const dMap = new Map(dst.map(r => [r.time_tag.slice(0, 13), +r.dst]));
+    const kMap = new Map(kp.map(r => [r.time_tag.slice(0, 13), +r.Kp]));
+    let lk = null; const kSeries = times.map(t => { if (kMap.has(t)) lk = kMap.get(t); return lk; });
+    chart('c-dst', {
+      data: { labels: times.map(t => hhmm(t + ':00:00Z')), datasets: [
+        { type: 'line', label: 'Dst (nT) — anello di corrente', data: times.map(t => dMap.get(t) ?? null), borderColor: C.violet, pointRadius: 0, borderWidth: 1.6, spanGaps: true, yAxisID: 'y' },
+        { type: 'line', label: 'Kp', data: kSeries, borderColor: C.orange, stepped: true, pointRadius: 0, borderWidth: 1.3, yAxisID: 'y2' },
+      ] },
+      options: { plugins: { title: { display: true, text: 'Ultimi giorni: Dst (più è negativo, più forte è la tempesta) e Kp' },
+        thresholds: { lines: [{ value: -50, label: 'tempesta moderata', color: C.warn }, { value: -100, label: 'tempesta intensa', color: C.orange }] } },
+        scales: { x: xCat(10), y: { title: { display: true, text: 'Dst nT' } }, y2: { position: 'right', min: 0, max: 9, title: { display: true, text: 'Kp' }, grid: { drawOnChartArea: false } } } },
+    });
+    const dLast = dst[dst.length - 1], kLast = kp[kp.length - 1];
+    const dMin = dst.reduce((a, r) => +r.dst < +a.dst ? r : a);
+    setCard('dst', 'Dst', `${fmt(+dLast.dst, 0)} <small>nT</small>`, dLast.dst <= -100 ? C.pink : dLast.dst <= -50 ? C.orange : dLast.dst <= -30 ? C.warn : C.ok,
+      `anello di corrente · ${hhmm(dLast.time_tag + 'Z')}`);
+    setCard('kp', 'Kp', fmt(kLast.Kp, 2), kLast.Kp >= 7 ? C.pink : kLast.Kp >= 5 ? C.orange : kLast.Kp >= 4 ? C.warn : C.ok, `disturbo geomagnetico 0–9 · ${hhmm(kLast.time_tag + 'Z')}`);
+    ins.push(['Il punto più basso degli ultimi giorni', `Dst ${fmt(+dMin.dst, 0)} nT il ${hhmm(dMin.time_tag + 'Z')}. ${dMin.dst <= -100 ? 'Tempesta intensa.' : dMin.dst <= -50 ? 'Tempesta moderata.' : dMin.dst <= -30 ? 'Tempesta debole.' : 'Nessuna tempesta vera.'} Per confronto: maggio 2024 −412 nT, evento di Carrington 1859 stimato fra −850 e −1750 nT.`]);
+  } else fail('c-dst', 'Dst/Kp NOAA non disponibili in questo momento.');
+
+  if (oR.status === 'fulfilled') {
+    const a = drawAurora(oR.value);
+    ins.push(['Fin dove arriva l\'aurora sopra l\'Europa', a.southEU < 90 ? `Con probabilità ≥10% fino a ${a.southEU}° N. Da Udine (46° N) un'aurora bassa all'orizzonte nord si vede di solito solo se l'ovale scende sotto ~55° N.` : 'Ovale aurorale debole: niente aurora sopra l\'Europa nelle prossime ore.']);
+  } else fail('aurora-canvas', 'Previsione aurora OVATION non disponibile.');
+
+  insights('ins-mag', ins);
+}
+
+// ───────────────────────── CAMPO MAGNETICO (IGRF-14, dipolo) ─────────────────────────
+// [anno, g10, g11, h11] in nT (DGRF/IGRF); 2025 + variazione secolare per estrapolare
+const IGRF = [[1900, -31543, -2298, 5922], [1950, -30554, -2250, 5815], [1960, -30421, -2169, 5791],
+  [1970, -30220, -2068, 5737], [1980, -29992, -1956, 5604], [1990, -29775, -1848, 5406], [2000, -29619.4, -1728.2, 5186.1],
+  [2005, -29554.63, -1669.05, 5077.99], [2010, -29496.57, -1586.42, 4944.26], [2015, -29441.46, -1501.77, 4795.99],
+  [2020, -29403.41, -1451.37, 4653.35], [2025, -29350.0, -1410.3, 4545.5]];
+const IGRF_SV = [12.6, 10.0, -21.5];
+const A_EARTH = 6371.2e3;
+function dipole([y, g10, g11, h11]) {
+  const B0 = Math.hypot(g10, g11, h11);
+  const M = B0 * 1e-9 * A_EARTH ** 3 / 1e-7; // A·m²
+  const lat = 90 - Math.acos(-g10 / B0) / deg;
+  const lon = Math.atan2(-h11, -g11) / deg;
+  return { y, B0, M, lat, lon };
+}
+function renderField() {
+  const now = new Date(); const yNow = now.getUTCFullYear() + now.getUTCMonth() / 12;
+  const last = IGRF[IGRF.length - 1], dt = yNow - 2025;
+  const cur = dipole([yNow, last[1] + IGRF_SV[0] * dt, last[2] + IGRF_SV[1] * dt, last[3] + IGRF_SV[2] * dt]);
+  const pts = IGRF.map(dipole);
+  chart('c-dipole', {
+    type: 'line',
+    data: { labels: [...pts.map(p => p.y), Math.round(yNow * 10) / 10], datasets: [
+      { label: 'Momento di dipolo (10²² A·m²)', data: [...pts.map(p => p.M / 1e22), cur.M / 1e22], borderColor: C.cyan, pointRadius: 3, borderWidth: 2 },
+    ] },
+    options: { plugins: { title: { display: true, text: 'Intensità della "calamita Terra" — in calo costante' }, legend: { display: false } },
+      scales: { x: { type: 'linear', min: 1900, max: 2030, ticks: { callback: v => v } }, y: { title: { display: true, text: '10²² A·m²' } } } },
+  });
+  chart('c-gpole', {
+    type: 'scatter',
+    data: { datasets: [{ label: 'Polo nord geomagnetico', data: [...pts, cur].map(p => ({ x: p.lon, y: p.lat, yr: Math.round(p.y) })), showLine: true, borderColor: C.orange, backgroundColor: C.orange, pointRadius: 3.5 }] },
+    options: { plugins: { title: { display: true, text: 'Dove sta il polo nord geomagnetico (dipolo), 1900 → oggi' }, legend: { display: false },
+      tooltip: { callbacks: { label: c => `${c.raw.yr}: ${fmt(c.parsed.y, 2)}° N, ${fmt(-c.parsed.x, 2)}° O` } } },
+      scales: { x: { title: { display: true, text: 'longitudine (° Est; negativo = Ovest)' } }, y: { title: { display: true, text: 'latitudine ° N' } } } },
+  });
+  const p0 = pts[0];
+  const loss = (1 - cur.M / p0.M) * 100, years = yNow - p0.y;
+  // distanza percorsa dal polo dal 1900 (gradi di arco → km)
+  const arc = (a, b) => Math.acos(Math.min(1, Math.sin(a.lat * deg) * Math.sin(b.lat * deg) + Math.cos(a.lat * deg) * Math.cos(b.lat * deg) * Math.cos((a.lon - b.lon) * deg))) / deg * 111.2;
+  const p2015 = pts.find(p => p.y === 2015);
+  setCard('gpole', 'Campo terrestre (dipolo)', `${fmt(cur.M / 1e22, 3)} <small>·10²² A·m²</small>`, C.text, `polo geomagnetico ${fmt(cur.lat, 2)}° N ${fmt(-cur.lon, 2)}° O`);
+  insights('ins-campo', [
+    ['Il campo si indebolisce', `Dal 1900 il dipolo ha perso il ${fmt(loss, 1)}% (circa ${fmt(loss / years * 100, 1)}% al secolo). È più veloce della media storica, ma i dati paleomagnetici mostrano che cali così sono già avvenuti senza inversioni.`],
+    ['Il polo geomagnetico si sposta', `${Math.round(arc(p0, cur))} km dal 1900, ${Math.round(arc(p2015, cur) / (yNow - 2015))} km l'anno nell'ultimo decennio. Si sta avvicinando al polo geografico.`],
+    ['Inversioni', 'L\'ultima inversione completa del campo è avvenuta 780 000 anni fa (Brunhes-Matuyama). In media capitano ogni 200-300 mila anni, ma in modo irregolare: non c\'è un "ritardo" da recuperare.'],
+    ['L\'Anomalia del Sud Atlantico', 'Fra Brasile e Sudafrica il campo è il più debole del pianeta (~22 000 nT contro i ~48 000 in Italia) e si sta allargando: lì i satelliti attraversano più radiazione e il telescopio Hubble sospende alcune osservazioni.'],
+  ]);
+}
+
+// ───────────────────────── GRAVITÀ ─────────────────────────
+const WGS = { a: 6378137, f: 1 / 298.257223563, m: 0.00344978600308, ge: 9.7803253359, k: 0.00193185265241, e2: 0.00669437999013 };
+function gNormal(latDeg, h = 0) {
+  const s2 = Math.sin(latDeg * deg) ** 2;
+  const g0 = WGS.ge * (1 + WGS.k * s2) / Math.sqrt(1 - WGS.e2 * s2);
+  return g0 * (1 - 2 / WGS.a * (1 + WGS.f + WGS.m - 2 * WGS.f * s2) * h + 3 / WGS.a ** 2 * h * h);
+}
+const PLACES = [
+  ['Udine', 46.06, 13.24, 113, 'riferimento'],
+  ['Trieste', 45.65, 13.78, 2, ''],
+  ['Polo Nord (mare)', 90, 0, 0, 'massimo: niente forza centrifuga e più vicini al centro'],
+  ['Equatore (mare)', 0, -78.5, 0, '21 km più lontani dal centro rispetto ai poli + centrifuga'],
+  ['Huascarán, Perù', -9.12, -77.6, 6768, 'il punto di superficie con la gravità più bassa'],
+  ['Everest', 27.99, 86.93, 8849, 'la vetta più alta, ma lontana dall\'equatore'],
+  ['Chimborazo, Ecuador', -1.47, -78.82, 6263, 'il punto più lontano dal centro della Terra'],
+  ['Mar Morto', 31.5, 35.5, -430, 'la terra emersa più bassa'],
+  ['Oslo', 59.91, 10.75, 20, ''],
+  ['Singapore', 1.29, 103.85, 15, ''],
+  ['Stazione ISS', 0, 0, 408000, 'in orbita la gravità c\'è ancora, si galleggia perché si cade'],
+];
+const ANOM = [
+  { name: 'Minimo del geoide dell\'Oceano Indiano', lat: 3, lon: 79, sign: -1, txt: 'il mare è ~106 m più basso dell\'ellissoide', cause: 'probabilmente resti freddi e densi di un antico oceano (Tetide) sprofondati nel mantello, che lasciano sopra materiale più leggero' },
+  { name: 'Nuova Guinea', lat: -4, lon: 145, sign: 1, txt: 'geoide ~ +85 m, il più alto del mondo', cause: 'zone di subduzione: placche oceaniche dense che scendono nel mantello' },
+  { name: 'Islanda e Atlantico del Nord', lat: 64, lon: -18, sign: 1, txt: 'geoide ~ +60 m', cause: 'pennacchio di mantello caldo che solleva la dorsale medio-atlantica' },
+  { name: 'Baia di Hudson, Canada', lat: 60, lon: -85, sign: -1, txt: 'anomalia di gravità ~ −30/−50 mGal', cause: 'il peso della calotta glaciale (fino a 3 km di ghiaccio) ha schiacciato la crosta, che sta ancora risalendo di ~1 cm l\'anno' },
+  { name: 'Ande', lat: -15, lon: -70, sign: 1, txt: 'geoide alto e forti anomalie locali', cause: 'catena montuosa giovane e subduzione della placca di Nazca' },
+  { name: 'Antartide occidentale', lat: -78, lon: -100, sign: -1, txt: 'perdita di massa misurata da GRACE', cause: 'scioglimento dei ghiacciai (~150 miliardi di tonnellate l\'anno): la gravità lì cala davvero, anno dopo anno' },
+];
+function gColor(g) { // 9.78 → blu, 9.832 → rosso
+  const t = Math.max(0, Math.min(1, (g - 9.780) / 0.0525));
+  const r = Math.round(40 + 215 * t), gg = Math.round(90 + 60 * Math.sin(t * Math.PI)), b = Math.round(255 - 215 * t);
+  return `rgb(${r},${gg},${b})`;
+}
+let gSel = { lat: 46.06, lon: 13.24 };
+function drawGravityMap() {
+  const cv = $('g-map'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const X = lon => (lon + 180) / 360 * W, Y = lat => (90 - lat) / 180 * H;
+  for (let py = 0; py < H; py += 2) { const lat = 90 - py / H * 180; ctx.fillStyle = gColor(gNormal(lat)); ctx.globalAlpha = .55; ctx.fillRect(0, py, W, 2); }
+  ctx.globalAlpha = 1;
+  if (land) { ctx.fillStyle = 'rgba(5,7,15,.45)'; ctx.strokeStyle = 'rgba(228,235,255,.55)'; ctx.lineWidth = .8;
+    eachRing(land, ring => {
+      // anelli che attraversano l'antimeridiano: longitudini "srotolate" e disegnate due volte (±360°)
+      let prev = ring[0][0], off = 0; const pts = ring.map(([lo, la]) => { if (lo - prev > 180) off -= 360; else if (prev - lo > 180) off += 360; prev = lo; return [lo + off, la]; });
+      const minLo = Math.min(...pts.map(p => p[0])), maxLo = Math.max(...pts.map(p => p[0]));
+      for (const shift of [0, minLo < -180 ? 360 : maxLo > 180 ? -360 : null]) { if (shift == null) continue;
+        ctx.beginPath(); pts.forEach(([lo, la], i) => i ? ctx.lineTo(X(lo + shift), Y(la)) : ctx.moveTo(X(lo + shift), Y(la))); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    }); }
+  ctx.font = '12px system-ui';
+  for (const a of ANOM) { const x = X(a.lon), y = Y(a.lat); ctx.fillStyle = a.sign > 0 ? C.orange : C.cyan;
+    ctx.font = 'bold 16px system-ui'; ctx.fillText(a.sign > 0 ? '▲' : '▼', x - 7, y + 6); }
+  for (const [n, la, lo, h] of PLACES) { if (h > 100000) continue; const x = X(lo), y = Y(Math.min(la, 89));
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); }
+  const sx = X(gSel.lon), sy = Y(gSel.lat);
+  ctx.strokeStyle = C.warn; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, sy, 8, 0, 2 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sx - 13, sy); ctx.lineTo(sx + 13, sy); ctx.moveTo(sx, sy - 13); ctx.lineTo(sx, sy + 13); ctx.stroke();
+  ctx.fillStyle = C.text; ctx.font = '12px system-ui';
+  for (const la of [60, 30, 0, -30, -60]) { ctx.fillText(la + '°', 4, Y(la) - 3); ctx.fillText(fmt(gNormal(la), 4) + ' m/s²', W - 96, Y(la) - 3); }
+  $('g-legend').innerHTML = `<span><i style="background:${gColor(9.780)}"></i>9,780 m/s² (equatore)</span><span><i style="background:${gColor(9.806)}"></i>9,806</span><span><i style="background:${gColor(9.832)}"></i>9,832 m/s² (poli)</span><span style="color:${C.orange}">▲ geoide/gravità più alti</span><span style="color:${C.cyan}">▼ più bassi</span>`;
+}
+function gUpdate() {
+  const lat = +$('g-lat').value, h = +$('g-alt').value, kg = +$('g-kg').value || 70;
+  const g = gNormal(lat, h), ref = gNormal(46.06, 113);
+  const diffG = (kg * g / ref - kg) * 1000;
+  $('g-out').innerHTML = `g = <b style="color:${C.warn}">${fmt(g, 5)}</b> m/s² · rispetto a Udine ${g >= ref ? '+' : ''}${fmt((g - ref) / ref * 100, 3)}% · una bilancia tarata a Udine segnerebbe <b>${fmt(kg * g / ref, 2)} kg</b> (${diffG >= 0 ? '+' : ''}${Math.round(diffG)} g)`;
+  gSel.lat = lat; drawGravityMap();
+}
+function initGravity() {
+  const sel = $('g-place');
+  sel.innerHTML = '<option value="">— scegli —</option>' + PLACES.map((p, i) => `<option value="${i}">${p[0]}</option>`).join('');
+  sel.onchange = () => { const p = PLACES[+sel.value]; if (!p) return; $('g-lat').value = p[1]; $('g-alt').value = p[3]; gSel.lon = p[2]; gUpdate(); };
+  for (const id of ['g-lat', 'g-alt', 'g-kg']) $(id).oninput = () => { sel.value = ''; gUpdate(); };
+  $('g-map').onclick = e => { const r = e.target.getBoundingClientRect();
+    const lon = (e.clientX - r.left) / r.width * 360 - 180, lat = 90 - (e.clientY - r.top) / r.height * 180;
+    gSel.lon = lon; $('g-lat').value = lat.toFixed(2); $('g-alt').value = 0; sel.value = ''; gUpdate(); };
+  const ref = gNormal(46.06, 113);
+  $('g-table').querySelector('tbody').innerHTML = PLACES.map(([n, la, lo, h, why]) => { const g = gNormal(la, h);
+    return `<tr><td>${n}</td><td class="num">${fmt(la, 2)}°</td><td class="num">${h.toLocaleString('it-IT')} m</td><td class="num">${fmt(g, 4)}</td><td class="num">${fmt(70 * g / ref, 2)} kg</td><td>${why}</td></tr>`; }).join('');
+  $('anom-table').querySelector('tbody').innerHTML = ANOM.map(a => `<tr><td>${a.sign > 0 ? '▲' : '▼'} ${a.name}</td><td>${a.txt}</td><td>${a.cause}</td></tr>`).join('');
+  gUpdate();
+}
+
+// ───────────────────────── AVVIO ─────────────────────────
+async function loadEOP() {
+  try {
+    const txt = await (await fetch(EOP_URL)).text();
+    const all = parseEOP(txt);
+    if (all.length < 1000) throw new Error('dati EOP incompleti');
+    const rot = renderRotation(all);
+    const pole = renderPole(all);
+    const obl = renderObliquity();
+    const dirTxt = pole.dirLon > 0 ? `${Math.round(pole.dirLon)}° Ovest` : `${Math.round(-pole.dirLon)}° Est`;
+    insights('ins-asse', [
+      ['Il polo cammina', `Dal ${pole.from} il polo medio si è spostato di ${fmt(pole.dist, 1)} m (${fmt(pole.dist / pole.years * 100, 1)} cm l'anno) in direzione del meridiano ${dirTxt}. Dagli anni 2000 la direzione è cambiata per lo scioglimento dei ghiacci di Groenlandia e Antartide e il pompaggio delle falde.`],
+      ['La spirale si è quasi fermata', `Nell'ultimo anno l'asse si è allontanato in media ${fmt(pole.amp, 1)} m dal centro della spirale; nel 2010 erano ${fmt(pole.ampOld, 1)} m. L'oscillazione di Chandler dal 2015 si è ridotta moltissimo e gli scienziati non sanno ancora bene perché.`],
+      ['Inclinazione in calo', `Oggi ${dms(obl.eps)}, e scende di ${fmt(-obl.rate, 1)}″ al secolo: circa 15 m l'anno di spostamento dei tropici verso l'equatore. Continuerà a scendere fino a circa 22,6° verso l'anno 11 800, poi tornerà a salire.`],
+      ['Nutazione', 'La Luna fa ondeggiare l\'asse di ±9,2″ con un periodo di 18,6 anni (il giro dei nodi lunari). Corrisponde a ±280 m sulla superficie.'],
+    ]);
+  } catch (e) {
+    console.error(e); fail('c-lod-all', 'Dati di rotazione IERS non raggiungibili: ' + e.message);
+    renderObliquity();
+  }
+}
+
+initGravity();
+loadLand().then(() => { drawGravityMap(); }).catch(() => {});
+renderField();
+loadEOP();
+loadMagnetosphere();
+setInterval(loadMagnetosphere, 10 * 60e3);
+</script>
+</body>
+</html>
