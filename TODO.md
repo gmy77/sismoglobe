@@ -4,6 +4,37 @@ Idee e controlli per le prossime sessioni. Stato aggiornato: **v1.9.9** (2026-10
 
 ## Da fare
 
+### Terra dinamica (`terra.html`, idee del 2026-11-08)
+
+- [ ] **Valore vivo nel riquadro 🧭 del globo** — oggi mostra solo l'icona. Far vedere un numero che
+  cambia, ad esempio la durata del giorno (`+1,2 ms`) o la distanza dello scudo magnetico (`10 R⊕`),
+  colorato come gli altri riquadri. Richiede codice in `main.js` (fetch NOAA/CelesTrak) e quindi bump di
+  `APP_VERSION` e dei `?v=` in `index.html`. CelesTrak EOP-All pesa ~2,4 MB: per il globo usare
+  `EOP-Last5Years.csv` (~230 KB) o solo i dati NOAA.
+- [ ] **Avviso tempesta sul globo** — toast quando la magnetopausa scende sotto 8 R⊕ (sotto 6,6 R⊕ i
+  satelliti geostazionari restano fuori dallo scudo) o quando il Dst scende sotto −50 nT. Stessa logica
+  di soglia già usata per il Kp; un solo avviso per evento, non ad ogni aggiornamento.
+- [ ] **Terremoti e rotazione** — sul grafico della durata del giorno segnare con linee verticali i
+  grandi sismi (Cile 1960, Alaska 1964, Sumatra 2004, Cile 2010, Tōhoku 2011), con tooltip
+  dell'effetto calcolato (es. Tōhoku −1,8 µs). Nota onesta da mettere: l'effetto è di microsecondi,
+  invisibile nel grafico in millisecondi, quindi le linee servono a dare il contesto e non sono una
+  correlazione visibile.
+- [ ] **Vera mappa delle anomalie di gravità** — sostituire la gravità solo teorica (latitudine e quota)
+  con una griglia misurata dai satelliti (geoide EGM2008 o anomalie in aria libera GOCE/GRACE, da ICGEM).
+  Serve un file pre-elaborato a bassa risoluzione (es. 1°×1°, PNG o JSON compresso) ospitato nel repo,
+  perché i servizi originali non hanno CORS e sono troppo pesanti.
+
+- [ ] **Rotazione automatica dopo lo spostamento laterale del globo** — con `Shift + trascina` viene
+  spostato anche il centro orbitale (`controls.target`). Tre secondi dopo il rilascio, il gestore
+  `pointerup` riattiva sempre `autoRotate` se la casella "rotazione" è selezionata: la telecamera inizia
+  così a ruotare attorno a un punto decentrato. Il globo scivola lentamente verso il lato opposto e cambia
+  dimensione apparente mentre la distanza fra telecamera e Terra varia. Riprodotto visivamente il
+  2026-10-17 fra le 11:34:52 e le 11:39:35.
+  Correzione proposta: se dopo l'interazione `controls.target` non è al centro, lasciare la rotazione
+  disattivata e allineare la casella nell'interfaccia; permettere la ripartenza dopo `Ricentra` o dopo una
+  nuova scelta esplicita dell'utente. Verificare separatamente trascinamento normale, `Shift + trascina`,
+  rotella, `Ricentra`, "vola sui nuovi" e comportamento desktop/mobile, senza modificare il rendering.
+
 - [x] **Fonte nel tooltip del globo** — passando il mouse su un punto mostrare se l'evento è USGS, EMSC o
   INGV, come già fanno le etichette `.q-src` nella lista. Il tooltip è in `pointLabel` (main.js, setup del
   globo) e, con i punti fusi delle viste 7g/30g, nel tooltip manuale `customTip`: aggiornati entrambi in v1.9.9.
@@ -26,5 +57,6 @@ Idee e controlli per le prossime sessioni. Stato aggiornato: **v1.9.9** (2026-10
 - Deploy: aumentare `?v=` di `main.js`/`style.css` in `index.html` e `APP_VERSION` in `main.js`; dopo il
   push aspettare che l'HTML live mostri la nuova versione **prima** di richiedere gli asset con il nuovo
   `?v=` (altrimenti Cloudflare mette in cache il file vecchio sotto il nuovo indirizzo per 1 ora).
-- Provare in locale con `python -m http.server 18080 --bind 127.0.0.1` (la porta 8765 è bloccata). Da
-  localhost il feed INGV di sismo-fvg non si carica: è normale, sul sito pubblico funziona.
+- Provare in locale con `python -m http.server 18080 --bind 127.0.0.1` (la porta 8765 è bloccata). INGV e
+  Kp usano ora le fonti ufficiali dirette: controllare sia gli esiti locali sia quelli pubblici e conservare
+  gli ultimi dati validi quando una fonte risponde solo parzialmente o temporaneamente non risponde.
