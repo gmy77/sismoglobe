@@ -42,11 +42,17 @@
   .card .val small { font-size: .8rem; font-weight: 500; color: var(--dim); }
   .card .note { color: var(--dim); font-size: .8rem; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid2 > * { min-width: 0; } /* senza questo i grafici non si restringono quando la finestra diventa più stretta */
   @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } section { padding: 14px; } }
   @media (max-width: 600px) { header { position: static; padding: 10px 16px; } #updated { margin-left: 0; } main { padding: 14px 10px 40px; } }
-  .chart { position: relative; height: 280px; }
-  .chart.tall { height: 340px; }
-  .chart.square { height: 360px; }
+  .chart { position: relative; height: clamp(260px, 15vw, 420px); }
+  .chart.tall { height: clamp(320px, 18vw, 500px); }
+  .chart.square { height: clamp(340px, 20vw, 560px); }
+  .chart.short { height: clamp(220px, 12vw, 340px); }
+  /* Monitor grandi: la pagina si allarga invece di restare una colonna da 1240 px */
+  @media (min-width: 1700px) { main { max-width: 1640px; } body { font-size: 16px; } }
+  @media (min-width: 2200px) { main { max-width: 2160px; } body { font-size: 17px; } .cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); } }
+  @media (min-width: 3000px) { main { max-width: 2800px; } body { font-size: 19px; } }
   .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
   .insight { border-left: 3px solid var(--accent); padding: 8px 12px; background: rgba(90,130,255,.05); border-radius: 0 10px 10px 0; }
   .insight b { color: var(--text); }
@@ -115,11 +121,11 @@
     <p class="sub">Il campo magnetico terrestre fa da scudo al vento solare. Quando il vento spinge forte e il suo campo punta a sud (Bz negativo), lo scudo si comprime, entra energia e nascono tempeste geomagnetiche e aurore. La forma qui sotto è calcolata in tempo reale dai dati dei satelliti in L1 (modello di Shue et al., 1998).</p>
     <div class="grid2">
       <div>
-        <canvas id="mp-canvas" class="map" width="640" height="420" style="cursor:default"></canvas>
+        <canvas id="mp-canvas" class="map" style="cursor:default"></canvas>
         <div class="legend"><span><i style="background:#4dd8ff"></i>magnetopausa adesso</span><span><i style="background:#99a7cf;opacity:.5"></i>magnetopausa media (10 R⊕)</span><span><i style="background:#ff7a00"></i>onda d'urto (indicativa)</span><span><i style="background:#ffe14d"></i>orbita geostazionaria (6,6 R⊕)</span></div>
       </div>
       <div>
-        <canvas id="aurora-canvas" class="map" width="640" height="420" style="cursor:default"></canvas>
+        <canvas id="aurora-canvas" class="map" style="cursor:default"></canvas>
         <div class="legend" id="aurora-legend"><span>Ovale aurorale previsto (NOAA OVATION), polo nord a sinistra e sud a destra. ● = Udine.</span></div>
       </div>
     </div>
@@ -127,7 +133,7 @@
       <div><div class="chart"><canvas id="c-sw"></canvas></div></div>
       <div><div class="chart"><canvas id="c-bz"></canvas></div></div>
     </div>
-    <div class="chart" style="margin-top:18px;height:240px"><canvas id="c-dst"></canvas></div>
+    <div class="chart short" style="margin-top:18px"><canvas id="c-dst"></canvas></div>
     <div class="insights" id="ins-mag"></div>
   </section>
 
@@ -144,7 +150,7 @@
   <section id="s-grav">
     <h2>⚖️ Dove c'è più o meno gravità</h2>
     <p class="sub">La gravità non è uguale ovunque: la Terra è schiacciata ai poli e ruota, quindi all'equatore si è più lontani dal centro e la forza centrifuga "alleggerisce". Salendo di quota cala ancora. Il calcolo usa la gravità normale dell'ellissoide WGS84 (formula di Somigliana) più la correzione per la quota. <b>Clicca sulla mappa</b> per scegliere un punto.</p>
-    <canvas id="g-map" class="map" width="1200" height="560"></canvas>
+    <canvas id="g-map" class="map"></canvas>
     <div class="legend" id="g-legend"></div>
     <div class="calc">
       <label>Luogo<select id="g-place"></select></label>
@@ -183,6 +189,7 @@ Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
 Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 Chart.defaults.plugins.legend.labels.boxWidth = 12;
 Chart.defaults.animation = false;
+Chart.defaults.font.size = innerWidth >= 3000 ? 15 : innerWidth >= 2200 ? 14 : innerWidth >= 1700 ? 13 : 12;
 Chart.defaults.maintainAspectRatio = false;
 
 const $ = id => document.getElementById(id);
@@ -192,6 +199,23 @@ const hhmm = t => new Date(t).toLocaleString('it-IT', { day: '2-digit', month: '
 const xCat = (max = 8) => ({ ticks: { maxTicksLimit: max, maxRotation: 0, autoSkip: true }, grid: { display: false } });
 const deg = Math.PI / 180;
 const charts = {};
+// Canvas disegnati a mano: dimensione presa dalla larghezza reale sullo schermo × densità di pixel
+// (monitor 4K, zoom di Windows 125-150%, telefoni), poi si disegna in pixel CSS.
+function prepCanvas(cv, aspect) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const W = Math.max(280, cv.clientWidth || cv.parentElement.clientWidth), H = Math.round(W * aspect);
+  cv.style.height = H + 'px';
+  const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+  if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  return { ctx, W, H, k: W / 640 };
+}
+const redraw = {};
+// font dei canvas proporzionato alla larghezza (base = larghezza di progetto), con limiti
+const cfont = (n, W, base, bold = '') => `${bold}${Math.round(n * Math.min(1.7, Math.max(0.85, W / base)))}px system-ui`;
+let resizeTimer = null;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
+  Object.values(redraw).forEach(f => f()); }, 150); });
 function chart(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); return charts[id]; }
 async function getJSON(url) { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(url + ' → ' + r.status); return r.json(); }
 function fail(id, msg) { const el = $(id); if (el) el.insertAdjacentHTML('beforebegin', `<p class="err">⚠ ${msg}</p>`); }
@@ -424,14 +448,14 @@ function shue(bz, pdyn) {
   return { r0, a, r: th => r0 * Math.pow(2 / (1 + Math.cos(th)), a) };
 }
 function drawMagnetosphere(bz, pdyn, speed) {
-  const cv = $('mp-canvas'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
-  ctx.clearRect(0, 0, W, H);
-  const ex = W * 0.42, ey = H / 2, s = 15; // pixel per raggio terrestre
+  redraw.mp = () => drawMagnetosphere(bz, pdyn, speed);
+  const { ctx, W, H } = prepCanvas($('mp-canvas'), 420 / 640);
+  const ex = W * 0.42, ey = H / 2, s = H / 28; // pixel per raggio terrestre
   // vento solare: linee che arrivano da sinistra
   ctx.strokeStyle = 'rgba(255,225,77,.18)'; ctx.lineWidth = 1;
   for (let y = 20; y < H; y += 26) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(60, y); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(52, y - 4); ctx.lineTo(60, y); ctx.lineTo(52, y + 4); ctx.stroke(); }
-  ctx.fillStyle = C.warn; ctx.font = '12px system-ui'; ctx.fillText(`☀ vento solare ${fmt(speed, 0)} km/s`, 8, 16);
+  ctx.fillStyle = C.warn; ctx.font = cfont(12, W, 640); ctx.textBaseline = 'top'; ctx.fillText(`☀ vento solare ${fmt(speed, 0)} km/s`, 8, 6); ctx.textBaseline = 'alphabetic';
   const curve = (fn, color, dash, w = 2) => {
     ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.beginPath();
     for (let t = -150; t <= 150; t += 2) { const th = t * deg, r = fn(th);
@@ -457,10 +481,10 @@ function drawMagnetosphere(bz, pdyn, speed) {
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.beginPath(); ctx.arc(ex, ey, s, -Math.PI / 2, Math.PI / 2); ctx.fill();
   // etichetta distanza al naso
   const nx = ex - m.r0 * s;
-  ctx.fillStyle = C.cyan; ctx.font = 'bold 13px system-ui';
-  ctx.fillText(`${fmt(m.r0, 1)} R⊕`, nx - 58, ey - 8);
-  ctx.fillStyle = C.dim; ctx.font = '11px system-ui';
-  ctx.fillText(`≈ ${Math.round(m.r0 * 6371).toLocaleString('it-IT')} km`, nx - 58, ey + 8);
+  ctx.fillStyle = C.cyan; ctx.font = cfont(13, W, 640, 'bold ');
+  ctx.textAlign = 'right'; ctx.fillText(`${fmt(m.r0, 1)} R⊕`, nx - 8, ey - 6);
+  ctx.fillStyle = C.dim; ctx.font = cfont(11, W, 640);
+  ctx.textBaseline = 'top'; ctx.fillText(`≈ ${Math.round(m.r0 * 6371).toLocaleString('it-IT')} km`, nx - 8, ey + 2); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillText(`Bz ${bz >= 0 ? '+' : ''}${fmt(bz, 1)} nT · pressione ${fmt(pdyn, 2)} nPa`, 8, H - 10);
   ctx.textAlign = 'right'; ctx.fillText('coda magnetica →', W - 8, ey + 4); ctx.textAlign = 'left';
   return m;
@@ -479,9 +503,9 @@ function eachRing(fc, fn) {
 }
 
 function drawAurora(ov) {
-  const cv = $('aurora-canvas'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
-  ctx.clearRect(0, 0, W, H);
-  const R = Math.min(W / 4, H / 2) - 14;
+  redraw.aurora = () => drawAurora(ov);
+  const { ctx, W, H } = prepCanvas($('aurora-canvas'), 420 / 640);
+  const R = Math.min(W / 4, H / 2) - 14, dot = Math.max(3, R * 0.03);
   const hemis = [{ cx: W / 4, cy: H / 2, north: true }, { cx: 3 * W / 4, cy: H / 2, north: false }];
   const grid = new Float32Array(360 * 181);
   for (const [lon, lat, v] of ov.coordinates) grid[lon * 181 + (lat + 90)] = v;
@@ -498,22 +522,22 @@ function drawAurora(ov) {
       const v = grid[lon * 181 + (lat + 90)]; if (v < 3) continue;
       const [x, y] = proj(lon, lat); const a = Math.min(1, v / 40);
       ctx.fillStyle = v >= 50 ? `rgba(255,59,48,${a})` : v >= 25 ? `rgba(255,225,77,${a})` : `rgba(104,224,127,${a * .9})`;
-      ctx.fillRect(x - 2.2, y - 2.2, 4.4, 4.4);
+      ctx.fillRect(x - dot / 2, y - dot / 2, dot, dot);
     }
     // cerchi di latitudine
     ctx.strokeStyle = 'rgba(153,167,207,.25)'; ctx.setLineDash([2, 4]);
     for (const la of [50, 60, 70, 80]) { ctx.beginPath(); ctx.arc(h.cx, h.cy, (90 - la) / 50 * R, 0, 2 * Math.PI); ctx.stroke(); }
     ctx.setLineDash([]);
     if (h.north) { const [ux, uy] = proj(UDINE.lon, UDINE.lat); ctx.fillStyle = C.cyan; ctx.beginPath(); ctx.arc(ux, uy, 4, 0, 2 * Math.PI); ctx.fill();
-      ctx.font = '11px system-ui'; ctx.fillText('Udine', ux + 6, uy + 4); }
+      ctx.font = cfont(11, W, 640); ctx.fillText('Udine', ux + 6, uy + 4); }
     ctx.restore();
     ctx.strokeStyle = 'rgba(90,130,255,.4)'; ctx.beginPath(); ctx.arc(h.cx, h.cy, R, 0, 2 * Math.PI); ctx.stroke();
-    ctx.fillStyle = C.dim; ctx.font = '12px system-ui'; ctx.fillText(h.north ? 'Polo Nord' : 'Polo Sud', h.cx - 26, 14);
+    ctx.fillStyle = C.dim; ctx.font = cfont(12, W, 640); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(h.north ? 'Polo Nord' : 'Polo Sud', h.cx, 2); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
   // confine più a sud dell'aurora sopra l'Europa (lon 0-30)
   let southEU = 90;
   for (let lon = 0; lon <= 30; lon++) for (let lat = 40; lat <= 90; lat++) if (grid[lon * 181 + lat + 90] >= 10 && lat < southEU) southEU = lat;
-  ctx.fillStyle = C.dim; ctx.font = '11px system-ui';
+  ctx.fillStyle = C.dim; ctx.font = cfont(11, W, 640);
   ctx.fillText(`osservazione ${hhmm(ov['Observation Time'])} · previsione ${hhmm(ov['Forecast Time'])}`, 8, H - 8);
   return { southEU };
 }
@@ -690,7 +714,8 @@ function gColor(g) { // 9.78 → blu, 9.832 → rosso
 }
 let gSel = { lat: 46.06, lon: 13.24 };
 function drawGravityMap() {
-  const cv = $('g-map'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  redraw.grav = drawGravityMap;
+  const { ctx, W, H } = prepCanvas($('g-map'), 560 / 1200);
   const X = lon => (lon + 180) / 360 * W, Y = lat => (90 - lat) / 180 * H;
   for (let py = 0; py < H; py += 2) { const lat = 90 - py / H * 180; ctx.fillStyle = gColor(gNormal(lat)); ctx.globalAlpha = .55; ctx.fillRect(0, py, W, 2); }
   ctx.globalAlpha = 1;
@@ -702,16 +727,16 @@ function drawGravityMap() {
       for (const shift of [0, minLo < -180 ? 360 : maxLo > 180 ? -360 : null]) { if (shift == null) continue;
         ctx.beginPath(); pts.forEach(([lo, la], i) => i ? ctx.lineTo(X(lo + shift), Y(la)) : ctx.moveTo(X(lo + shift), Y(la))); ctx.closePath(); ctx.fill(); ctx.stroke(); }
     }); }
-  ctx.font = '12px system-ui';
+  ctx.font = cfont(12, W, 1200);
   for (const a of ANOM) { const x = X(a.lon), y = Y(a.lat); ctx.fillStyle = a.sign > 0 ? C.orange : C.cyan;
-    ctx.font = 'bold 16px system-ui'; ctx.fillText(a.sign > 0 ? '▲' : '▼', x - 7, y + 6); }
+    ctx.font = cfont(16, W, 1200, 'bold '); ctx.fillText(a.sign > 0 ? '▲' : '▼', x - 7, y + 6); }
   for (const [n, la, lo, h] of PLACES) { if (h > 100000) continue; const x = X(lo), y = Y(Math.min(la, 89));
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); }
   const sx = X(gSel.lon), sy = Y(gSel.lat);
   ctx.strokeStyle = C.warn; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, sy, 8, 0, 2 * Math.PI); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(sx - 13, sy); ctx.lineTo(sx + 13, sy); ctx.moveTo(sx, sy - 13); ctx.lineTo(sx, sy + 13); ctx.stroke();
-  ctx.fillStyle = C.text; ctx.font = '12px system-ui';
-  for (const la of [60, 30, 0, -30, -60]) { ctx.fillText(la + '°', 4, Y(la) - 3); ctx.fillText(fmt(gNormal(la), 4) + ' m/s²', W - 96, Y(la) - 3); }
+  ctx.fillStyle = C.text; ctx.font = cfont(12, W, 1200);
+  for (const la of [60, 30, 0, -30, -60]) { ctx.fillText(la + '°', 4, Y(la) - 3); if (W >= 560) { ctx.textAlign = 'right'; ctx.fillText(fmt(gNormal(la), 4) + ' m/s²', W - 6, Y(la) - 3); ctx.textAlign = 'left'; } }
   $('g-legend').innerHTML = `<span><i style="background:${gColor(9.780)}"></i>9,780 m/s² (equatore)</span><span><i style="background:${gColor(9.806)}"></i>9,806</span><span><i style="background:${gColor(9.832)}"></i>9,832 m/s² (poli)</span><span style="color:${C.orange}">▲ geoide/gravità più alti</span><span style="color:${C.cyan}">▼ più bassi</span>`;
 }
 function gUpdate() {
