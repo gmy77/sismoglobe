@@ -46,6 +46,10 @@ poi aprire <http://localhost:8642>.
 
 Diagnostica delle fonti e log Cloudflare: [SOURCE-OPERATIONS.md](SOURCE-OPERATIONS.md).
 
+## ECHO Constellation (2026-11-12)
+
+- Riquadro "satelliti" in alto: apre [ECHO Constellation](https://echo-constellation.gimmy077.workers.dev/), la mappa piatta con i satelliti in tempo reale. Progetto separato (cartella `repos/orbite`), ospitato su Cloudflare Workers.
+
 ## Terra dinamica (2026-11-08)
 
 - **Pagina [`terra.html`](https://sismo.gimmycloud.net/terra.html)**, aperta dal riquadro "terra" in alto. Tutto lato browser, nessun worker: le fonti hanno CORS aperto.

@@ -1,5 +1,9 @@
 # Changelog
 
+## ECHO Constellation - 2026-11-12
+
+- Nuovo riquadro "satelliti" in alto accanto a "terra": apre in una nuova scheda [ECHO Constellation](https://echo-constellation.gimmy077.workers.dev/), la mappa piatta con i satelliti in tempo reale (ISS e Tiangong, Starlink, GPS, GLONASS, Galileo, BeiDou, OneWeb, Amazon Leo, Iridium). È un progetto a parte, ospitato su Cloudflare.
+
 ## Terra dinamica - 2026-11-08
 
 - Nuova pagina `terra.html`: durata del giorno dal 1962 e UT1−UTC con i secondi intercalari (IERS via CelesTrak), traccia e deriva del polo di rotazione, inclinazione dell'asse (nutazione 18,6 anni e ciclo di 41 000 anni), magnetosfera in tempo reale (forma della magnetopausa con il modello di Shue, vento solare, Bz, Dst, Kp, ovale aurorale OVATION), campo magnetico IGRF dal 1900 e calcolatore della gravità con mappa e anomalie.
