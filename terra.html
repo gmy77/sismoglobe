@@ -71,6 +71,24 @@
   .err { color: var(--orange); font-size: .88rem; }
   .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--dim); font-size: .8rem; margin-top: 8px; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+  .btn { background: rgba(90,130,255,.12); color: var(--text); border: 1px solid rgba(90,130,255,.45); border-radius: 9px;
+         padding: 7px 14px; font: inherit; font-size: .9rem; cursor: pointer; }
+  .btn:hover { background: rgba(90,130,255,.22); }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .btn.on { background: rgba(255,122,0,.18); border-color: var(--orange); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: .8rem; color: var(--dim); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-family: inherit; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .status { color: var(--dim); font-size: .86rem; }
+  .story { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px; background: rgba(255,183,77,.06); border-left: 3px solid #ffb74d; color: var(--text); }
+  .story p { margin: 0 0 6px; } .story p:last-child { margin: 0; }
+  .clocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .clock { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  .clock .lab { color: var(--dim); font-size: .76rem; text-transform: uppercase; letter-spacing: .06em; }
+  .clock .t { font: 700 clamp(1.6rem, 3.2vw, 2.6rem) ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .clock .t small { font-size: .55em; color: var(--dim); }
+  .clock .note { color: var(--dim); font-size: .8rem; }
   footer { color: var(--dim); font-size: .82rem; text-align: center; padding: 10px 16px 30px; }
 </style>
 </head>
@@ -79,7 +97,7 @@
   <a class="back" href="./">← Globo</a>
   <h1>🧭 Terra dinamica <small>— rotazione, asse, magnetosfera, gravità</small></h1>
   <nav class="jump">
-    <a href="#s-rot">Rotazione</a><a href="#s-asse">Asse</a><a href="#s-mag">Magnetosfera</a><a href="#s-campo">Campo</a><a href="#s-grav">Gravità</a>
+    <a href="#s-giorno">Un giorno</a><a href="#s-rot">Rotazione</a><a href="#s-asse">Asse</a><a href="#s-mag">Magnetosfera</a><a href="#s-campo">Campo</a><a href="#s-sismi">Sismi</a><a href="#s-grav">Gravità</a>
   </nav>
   <span id="updated">caricamento…</span>
 </header>
@@ -91,10 +109,40 @@
     <div class="cards" id="now"></div>
   </section>
 
+  <section id="s-orologio">
+    <h2>⏱️ Orologio Terra contro orologio atomico</h2>
+    <p class="sub">Il tempo civile (UTC) è scandito da orologi atomici; il "tempo della Terra" (UT1) è la sua rotazione reale, misurata dall'IERS. Qui scorrono insieme: la differenza è quanto la Terra è avanti o indietro, in questo istante. L'ora atomica viene dall'orologio del tuo dispositivo, quindi può sbagliare di qualche decimo di secondo: la <b>differenza</b> invece è esatta.</p>
+    <div class="clocks">
+      <div class="clock"><div class="lab">Orologio atomico · UTC</div><div class="t" id="ck-utc">--:--:--</div><div class="note">tempo civile, base di tutti gli orologi del mondo</div></div>
+      <div class="clock"><div class="lab">Orologio Terra · UT1</div><div class="t" id="ck-ut1">--:--:--</div><div class="note">dove si trova davvero la Terra nella sua rotazione</div></div>
+      <div class="clock"><div class="lab">La Terra è</div><div class="t" id="ck-diff">–</div><div class="note" id="ck-diff-note">rispetto all'orologio atomico</div></div>
+    </div>
+    <div class="insights" id="ins-clock"></div>
+  </section>
+
+  <section id="s-giorno">
+    <h2>📅 Com'era la Terra in un giorno qualsiasi</h2>
+    <p class="sub">Scegli una data dal 1900 a oggi: un compleanno, un anniversario, un evento storico. La pagina ricostruisce com'erano la rotazione, il polo, l'inclinazione dell'asse, il campo magnetico, il Sole, la Luna e i terremoti più forti di quel giorno, e li confronta con oggi. Il link si può condividere.</p>
+    <div class="row">
+      <label class="status" for="day-in">Data</label>
+      <input id="day-in" type="date" min="1900-01-01" style="background:#0a1024;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font:inherit">
+      <button class="btn" id="day-go" type="button">Racconta</button>
+      <button class="btn" id="day-share" type="button" title="Copia il link a questa data">🔗 Copia link</button>
+      <span class="status" id="day-status"></span>
+    </div>
+    <div class="chips" id="day-presets"></div>
+    <div class="cards" id="day-cards" style="margin-top:14px"></div>
+    <div class="story" id="day-story" hidden></div>
+  </section>
+
   <section id="s-rot">
     <h2>🕐 Quanto dura un giorno</h2>
     <p class="sub">La Terra non gira a velocità costante. Il grafico mostra di quanti <b>millisecondi</b> un giorno supera le 86 400 s esatte (misure IERS con radiotelescopi VLBI e satelliti). Sopra lo zero la Terra rallenta, sotto accelera. Le oscillazioni veloci sono maree e venti; quelle lente vengono dal nucleo liquido.</p>
     <div class="chart tall"><canvas id="c-lod-all"></canvas></div>
+    <div class="row">
+      <button class="btn" id="snd-btn" type="button" disabled>🔊 Ascolta la Terra (60 anni in 1 minuto)</button>
+      <span class="status" id="snd-status">Più la Terra gira veloce, più la nota sale. La seconda voce, a sinistra e a destra, è il polo che oscilla; ogni "tic" è un secondo intercalare.</span>
+    </div>
     <div class="grid2" style="margin-top:18px">
       <div><div class="chart"><canvas id="c-lod-recent"></canvas></div></div>
       <div><div class="chart"><canvas id="c-ut1"></canvas></div></div>
@@ -122,6 +170,7 @@
     <div class="grid2">
       <div>
         <canvas id="mp-canvas" class="map" style="cursor:default"></canvas>
+        <div class="row"><button class="btn" id="mp-replay" type="button" disabled>▶ Rigioca le ultime 24 ore in 20 secondi</button><span class="status" id="mp-replay-status"></span></div>
         <div class="legend"><span><i style="background:#4dd8ff"></i>magnetopausa adesso</span><span><i style="background:#99a7cf;opacity:.5"></i>magnetopausa media (10 R⊕)</span><span><i style="background:#ff7a00"></i>onda d'urto (indicativa)</span><span><i style="background:#ffe14d"></i>orbita geostazionaria (6,6 R⊕)</span></div>
       </div>
       <div>
@@ -145,6 +194,17 @@
       <div><div class="chart"><canvas id="c-gpole"></canvas></div></div>
     </div>
     <div class="insights" id="ins-campo"></div>
+  </section>
+
+  <section id="s-sismi">
+    <h2>⚖️ I grandi terremoti seguono la rotazione? Il test onesto</h2>
+    <p class="sub">Nel 2017 i geologi Bendick e Bilham hanno sostenuto che i terremoti di magnitudo 7 e oltre aumentano qualche anno dopo che la Terra comincia a rallentare. È un'idea discussa, non accettata da tutti. Qui la mettiamo alla prova con i dati veri: tutti i sismi M7+ del catalogo USGS dal 1962 e la durata del giorno IERS. Il test toglie prima le tendenze di lungo periodo (che da sole creano correlazioni finte) e poi confronta il risultato con la stessa serie di terremoti spostata nel tempo: se la correlazione vera non batte quasi tutte quelle spostate, non è una prova.</p>
+    <div class="row"><button class="btn" id="eq-run" type="button" disabled>Esegui il test</button><span class="status" id="eq-status">Scarica circa 900 terremoti (≈0,8 MB) dal catalogo USGS.</span></div>
+    <div class="grid2">
+      <div><div class="chart"><canvas id="c-eq-years"></canvas></div></div>
+      <div><div class="chart"><canvas id="c-eq-lag"></canvas></div></div>
+    </div>
+    <div class="story" id="eq-verdict" hidden></div>
   </section>
 
   <section id="s-grav">
@@ -234,6 +294,18 @@ Chart.register({
       ctx.setLineDash([]); ctx.globalAlpha = .9; ctx.fillStyle = l.color; ctx.font = '11px system-ui';
       ctx.fillText(l.label, a.right - ctx.measureText(l.label).width - 4, y - 4); ctx.restore();
     }
+  },
+});
+
+// Cursore verticale (usato dal suono sul grafico della durata del giorno)
+Chart.register({
+  id: 'playhead',
+  afterDatasetsDraw(chart, _a, opts) {
+    if (!opts || opts.index == null) return;
+    const { ctx, chartArea: a } = chart, x = chart.scales.x.getPixelForValue(opts.index);
+    ctx.save(); ctx.strokeStyle = C.orange; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, a.top); ctx.lineTo(x, a.bottom); ctx.stroke();
+    if (opts.label) { ctx.fillStyle = C.orange; ctx.font = 'bold 13px system-ui'; ctx.fillText(opts.label, Math.min(x + 6, a.right - 40), a.top + 14); }
+    ctx.restore();
   },
 });
 
@@ -335,7 +407,8 @@ function renderRotation(all) {
     `ritardo della Terra sull'orologio atomico · secondo intercalare se si supera ±0,9 s`);
 
   insights('ins-rot', [
-    ['Il giorno più corto mai misurato', `${fmtDate(shortest.date)}: ${fmt(shortest.lod, 3)} ms rispetto alle 24 h esatte. La Terra ha girato più veloce di qualunque altro giorno dal 1962.`],
+    ['Il giorno più corto mai misurato', `${fmtDate(shortest.date)}: ${fmt(shortest.lod, 3)} ms rispetto alle 24 h esatte. La Terra ha girato più veloce di qualunque altro giorno dall'inizio delle misure moderne (1962).`],
+    ['Perché i record cadono a inizio estate', 'I giorni più corti arrivano sempre fra fine giugno e inizio luglio: d\'estate i grandi venti che soffiano verso est rallentano e cedono rotazione alla Terra solida, la marea lunare aggiunge qualche decimo di millisecondo e, dal 2016 circa, il nucleo liquido spinge nella stessa direzione.'],
     ['Il giorno più lungo dal 1972', `${fmtDate(longest.date)}: +${fmt(longest.lod, 2)} ms.`],
     ['Tendenza su 12 mesi', `Massimo ${ymax.k?.slice(0, 4)} (+${fmt(ymax.v, 2)} ms), minimo ${ymin.k?.slice(0, 4)} (${fmt(ymin.v, 2)} ms). Le maree lunari allungano il giorno di ~2,3 ms al secolo, ma il nucleo liquido e lo scioglimento dei ghiacci si sovrappongono e per decenni possono invertire la tendenza.`],
     ['Secondi intercalari', `${leaps.length} aggiunti dal 1972, l'ultimo il ${fmtDate(lastLeap)}. Dal 2035 verranno aboliti (decisione CGPM 2022): lo scarto potrà crescere oltre il secondo.`],
@@ -447,8 +520,8 @@ function shue(bz, pdyn) {
   const a = (0.58 - 0.007 * bz) * (1 + 0.024 * Math.log(pdyn));
   return { r0, a, r: th => r0 * Math.pow(2 / (1 + Math.cos(th)), a) };
 }
-function drawMagnetosphere(bz, pdyn, speed) {
-  redraw.mp = () => drawMagnetosphere(bz, pdyn, speed);
+function drawMagnetosphere(bz, pdyn, speed, label) {
+  redraw.mp = () => drawMagnetosphere(bz, pdyn, speed, label);
   const { ctx, W, H } = prepCanvas($('mp-canvas'), 420 / 640);
   const ex = W * 0.42, ey = H / 2, s = H / 28; // pixel per raggio terrestre
   // vento solare: linee che arrivano da sinistra
@@ -486,6 +559,7 @@ function drawMagnetosphere(bz, pdyn, speed) {
   ctx.fillStyle = C.dim; ctx.font = cfont(11, W, 640);
   ctx.textBaseline = 'top'; ctx.fillText(`≈ ${Math.round(m.r0 * 6371).toLocaleString('it-IT')} km`, nx - 8, ey + 2); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillText(`Bz ${bz >= 0 ? '+' : ''}${fmt(bz, 1)} nT · pressione ${fmt(pdyn, 2)} nPa`, 8, H - 10);
+  if (label) { ctx.fillStyle = C.orange; ctx.font = cfont(16, W, 640, 'bold '); ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText(label, W - 8, 6); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; }
   ctx.textAlign = 'right'; ctx.fillText('coda magnetica →', W - 8, ey + 4); ctx.textAlign = 'left';
   return m;
 }
@@ -584,9 +658,14 @@ async function loadMagnetosphere() {
     // valori attuali: media degli ultimi 30 minuti disponibili
     const lastN = (map, n = 3) => { const v = [...map.values()].slice(-n); return v.length ? v.reduce((a, b) => a + b) / v.length : null; };
     swNow = lastN(sp); bzNow = lastN(bz); const dNow = lastN(dn);
+    // fotogrammi per il replay: un fotogramma ogni 10 minuti, valori mancanti presi dal precedente
+    { let ls = null, ld = null, lb = null; mpFrames = keys.map(k => { ls = sp.get(k) ?? ls; ld = dn.get(k) ?? ld; lb = bz.get(k) ?? lb;
+        return { t: k + ':00Z', speed: ls, dens: ld, bz: lb }; }).filter(f => f.speed && f.dens && f.bz != null);
+      $('mp-replay').disabled = mpFrames.length < 10; }
     pdyn = 1.6726e-6 * dNow * swNow * swNow;
+    swNowG = swNow; bzNowG = bzNow; pdynG = pdyn;
     if (swNow && pdyn) {
-      const mp = drawMagnetosphere(bzNow, pdyn, swNow);
+      const mp = mpReplay ? shue(bzNow, pdyn) : drawMagnetosphere(bzNow, pdyn, swNow);
       setCard('mp', 'Scudo magnetico (naso)', `${fmt(mp.r0, 1)} <small>R⊕</small>`, mp.r0 < 6.6 ? C.pink : mp.r0 < 8 ? C.orange : C.ok,
         `${Math.round(mp.r0 * 6371).toLocaleString('it-IT')} km dal centro della Terra · normale ~10 R⊕`);
       ins.push(['Quanto è compresso lo scudo', mp.r0 < 6.6 ? `La magnetopausa è a ${fmt(mp.r0, 1)} raggi terrestri: dentro l'orbita geostazionaria! I satelliti a 36 000 km sono esposti direttamente al vento solare.`
@@ -725,7 +804,16 @@ function drawGravityMap() {
       let prev = ring[0][0], off = 0; const pts = ring.map(([lo, la]) => { if (lo - prev > 180) off -= 360; else if (prev - lo > 180) off += 360; prev = lo; return [lo + off, la]; });
       const minLo = Math.min(...pts.map(p => p[0])), maxLo = Math.max(...pts.map(p => p[0]));
       for (const shift of [0, minLo < -180 ? 360 : maxLo > 180 ? -360 : null]) { if (shift == null) continue;
-        ctx.beginPath(); pts.forEach(([lo, la], i) => i ? ctx.lineTo(X(lo + shift), Y(la)) : ctx.moveTo(X(lo + shift), Y(la))); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        // L'Antartide fa il giro completo attorno al polo (oltre 350° di longitudine): il suo anello si
+        // "chiude" con un segmento orizzontale verso −85°, che non è una costa. Riempimento esteso fino a
+        // −90° e contorno disegnato aperto, senza quel segmento.
+        const circum = maxLo - minLo > 350, [f, l] = [pts[0], pts[pts.length - 1]];
+        ctx.beginPath(); pts.forEach(([lo, la], i) => i ? ctx.lineTo(X(lo + shift), Y(la)) : ctx.moveTo(X(lo + shift), Y(la)));
+        if (circum) { const s = Math.sign(f[1]) || -1; ctx.lineTo(X(l[0] + shift), Y(90 * s)); ctx.lineTo(X(f[0] + shift), Y(90 * s)); }
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath(); pts.forEach(([lo, la], i) => i ? ctx.lineTo(X(lo + shift), Y(la)) : ctx.moveTo(X(lo + shift), Y(la)));
+        if (!circum) ctx.closePath();
+        ctx.stroke(); }
     }); }
   ctx.font = cfont(12, W, 1200);
   for (const a of ANOM) { const x = X(a.lon), y = Y(a.lat); ctx.fillStyle = a.sign > 0 ? C.orange : C.cyan;
@@ -761,12 +849,314 @@ function initGravity() {
   gUpdate();
 }
 
+
+// ───────────────────────── OROLOGIO TERRA ─────────────────────────
+let EOP_ALL = null;
+const dayMs = r => Date.parse(r.date + 'T00:00:00Z');
+// UT1−UTC in secondi a un istante qualsiasi, interpolando fra i giorni IERS (misurati o previsti)
+function dut1At(t) {
+  const a = EOP_ALL; let lo = 0, hi = a.length - 1;
+  if (t <= dayMs(a[0])) return a[0].ut1; if (t >= dayMs(a[hi])) return a[hi].ut1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (dayMs(a[m]) <= t) lo = m; else hi = m; }
+  let d0 = a[lo].ut1, d1 = a[hi].ut1; if (Math.abs(d1 - d0) > 0.5) d1 += Math.sign(d0 - d1); // salto di un secondo intercalare
+  return d0 + (d1 - d0) * (t - dayMs(a[lo])) / (dayMs(a[hi]) - dayMs(a[lo]));
+}
+function initClock() {
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  const show = t => { const d = new Date(t); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}<small>.${pad(d.getUTCMilliseconds(), 3)}</small>`; };
+  const tick = () => { const t = Date.now(), dut = dut1At(t);
+    $('ck-utc').innerHTML = show(t); $('ck-ut1').innerHTML = show(t + dut * 1000);
+    $('ck-diff').innerHTML = `${fmt(Math.abs(dut * 1000), 1)} <small>ms</small>`;
+    $('ck-diff').style.color = dut < 0 ? C.cyan : C.orange;
+    $('ck-diff-note').textContent = (dut < 0 ? 'in ritardo' : 'in anticipo') + ' rispetto all\'orologio atomico';
+    requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  // stime: andamento previsto dall'IERS e deriva lunga fra Terra e tempo atomico (UT1 − TAI)
+  const obs = EOP_ALL.filter(r => r.obs), last = obs[obs.length - 1], pred = EOP_ALL[EOP_ALL.length - 1];
+  const rateNow = (pred.ut1 - last.ut1) / ((dayMs(pred) - dayMs(last)) / 864e5); // s al giorno
+  const toLimit = rateNow < 0 ? (0.9 + last.ut1) / -rateNow : rateNow > 0 ? (0.9 - last.ut1) / rateNow : Infinity;
+  const tai = r => r.ut1 - r.dat; // UT1 − TAI
+  const back = (y) => obs.find(r => r.date >= `${+last.date.slice(0, 4) - y}${last.date.slice(4)}`);
+  const r10 = back(10), r50 = back(50);
+  const drift10 = (tai(last) - tai(r10)) / 10, drift50 = (tai(last) - tai(r50)) / 50; // s all'anno
+  const minute = d => d < -0.01 ? Math.round(60 / -d) : null;
+  insights('ins-clock', [
+    ['Il prossimo secondo intercalare', isFinite(toLimit) && toLimit > 0
+      ? `Al ritmo previsto dall'IERS lo scarto arriverebbe a 0,9 s, il limite oltre il quale si aggiunge un secondo, verso ${fmtDate(Date.now() + toLimit * 864e5)}. È una stima: la rotazione cambia, e l'IERS annuncia ogni secondo intercalare con 6 mesi di anticipo.`
+      : 'Lo scarto è stabile: nessun secondo intercalare in vista.'],
+    ['Quando arriveremo a 1 minuto', `Dal 2035 i secondi intercalari spariranno e lo scarto potrà crescere. Al ritmo degli ultimi 10 anni (${fmt(drift10, 2)} s/anno) il minuto intero arriverebbe ${minute(drift10) ? 'fra circa ' + minute(drift10) + ' anni' : 'fra moltissimo tempo'}; al ritmo medio degli ultimi 50 (${fmt(drift50, 2)} s/anno) ${minute(drift50) ? 'fra circa ' + minute(drift50) + ' anni' : 'fra moltissimo tempo'}.`],
+    ['Perché due orologi', 'Il secondo atomico è fisso; il giorno della Terra no. Fino al 1960 il secondo era definito dalla rotazione terrestre: oggi i GPS, le reti elettriche e Internet usano il tempo atomico, mentre astronomi e antenne satellitari hanno bisogno di sapere dove punta davvero la Terra.'],
+  ]);
+}
+
+// ───────────────────────── COM'ERA LA TERRA IN UN GIORNO ─────────────────────────
+const DAY_PRESETS = [
+  ['1960-11-13', 'La tempesta solare più forte misurata'], ['1961-10-30', 'Tsar Bomba, 50 megatoni'], ['1969-07-20', 'Sbarco sulla Luna'],
+  ['1976-05-06', 'Terremoto del Friuli'], ['1989-03-13', 'Blackout del Québec'], ['2004-12-26', 'Sumatra M9.1'],
+  ['2011-03-11', 'Tōhoku M9.1'], ['2024-05-11', 'Aurora in tutta Italia'], ['2024-07-05', 'Il giorno più corto'],
+];
+let sunHist = null;
+async function getSunHist() { if (!sunHist) sunHist = await getJSON('https://sismo-fvg.gimmy077.workers.dev/api/radiation/history'); return sunHist; }
+// Fase lunare: luna nuova di riferimento 6 gen 2000 18:14 UTC, mese sinodico medio
+function moonPhase(t) {
+  const syn = 29.530588853, age = (((t - Date.UTC(2000, 0, 6, 18, 14)) / 864e5) % syn + syn) % syn;
+  const ill = (1 - Math.cos(2 * Math.PI * age / syn)) / 2;
+  const names = [[1.84, '🌑 luna nuova', 'la luna nuova'], [5.53, '🌒 falce crescente', 'una falce di luna crescente'], [9.22, '🌓 primo quarto', 'la luna al primo quarto'],
+    [12.91, '🌔 gibbosa crescente', 'una luna gibbosa crescente'], [16.61, '🌕 luna piena', 'la luna piena'], [20.3, '🌖 gibbosa calante', 'una luna gibbosa calante'],
+    [23.99, '🌗 ultimo quarto', "la luna all'ultimo quarto"], [27.68, '🌘 falce calante', 'una falce di luna calante'], [30, '🌑 luna nuova', 'la luna nuova']];
+  const n = names.find(([a]) => age < a);
+  return { age, ill, name: n[1], phrase: n[2] };
+}
+function dipoleAt(year) {
+  const E = IGRF; let a = E[0], b = E[E.length - 1];
+  if (year >= b[0]) { const dt = year - 2025; return dipole([year, b[1] + IGRF_SV[0] * dt, b[2] + IGRF_SV[1] * dt, b[3] + IGRF_SV[2] * dt]); }
+  for (let i = 0; i < E.length - 1; i++) if (year >= E[i][0] && year <= E[i + 1][0]) { a = E[i]; b = E[i + 1]; break; }
+  const f = (year - a[0]) / (b[0] - a[0] || 1);
+  return dipole([year, ...[1, 2, 3].map(k => a[k] + (b[k] - a[k]) * f)]);
+}
+const eopOn = iso => EOP_ALL && EOP_ALL.find(r => r.date === iso);
+function apWord(ap) { return ap == null ? '' : ap >= 100 ? 'tempesta estrema' : ap >= 50 ? 'tempesta forte' : ap >= 30 ? 'tempesta geomagnetica' : ap >= 15 ? 'campo agitato' : 'campo tranquillo'; }
+
+async function tellDay(iso) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || iso < '1900-01-01' || iso > today) { $('day-status').textContent = 'Scegli una data fra il 1900 e oggi.'; return; }
+  $('day-in').value = iso;
+  if (!EOP_ALL) { dayPending = iso; $('day-status').textContent = 'Aspetto i dati di rotazione IERS…'; return; }
+  $('day-status').textContent = 'Ricostruisco…';
+  history.replaceState(null, '', `?data=${iso}#s-giorno`);
+  const t = Date.parse(iso + 'T12:00:00Z'), year = +iso.slice(0, 4) + (Date.parse(iso) - Date.UTC(+iso.slice(0, 4), 0, 1)) / 31557600000;
+  const [sunR, qR] = await Promise.allSettled([
+    getSunHist(),
+    getJSON(`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${iso}T00:00:00&endtime=${iso}T23:59:59&minmagnitude=5&orderby=magnitude&limit=5`),
+  ]);
+  const cards = [], story = [];
+  const fmtD = fmtDate(iso);
+  // Rotazione e polo (IERS dal 1962)
+  const e = eopOn(iso), now = EOP_ALL && EOP_ALL.filter(r => r.obs).slice(-1)[0];
+  if (e) {
+    cards.push(['Durata del giorno', `${e.lod >= 0 ? '+' : ''}${fmt(e.lod, 2)} <small>ms</small>`, e.lod < 0 ? C.cyan : C.text, `oltre le 24 h · oggi ${now.lod >= 0 ? '+' : ''}${fmt(now.lod, 2)} ms`]);
+    const pd = Math.hypot(now.x - e.x, now.y - e.y) * ARCSEC_M;
+    cards.push(['Polo di rotazione', `${fmt(pd, 1)} <small>m</small>`, C.text, 'di quanto si è spostato da quel giorno a oggi']);
+    const leaps = iso < '1972-01-01' ? now.dat - 10 : now.dat - e.dat;
+    cards.push(['Secondi intercalari', `${leaps}`, C.text, 'aggiunti da quel giorno a oggi']);
+    story.push(`Il ${fmtD} la Terra impiegava ${e.lod >= 0 ? fmt(e.lod, 2) + ' millisecondi in più' : fmt(-e.lod, 2) + ' millisecondi in meno'} delle 24 ore esatte per un giro. Oggi ${now.lod >= 0 ? 'ne impiega ' + fmt(now.lod, 2) + ' in più' : 'ne impiega ' + fmt(-now.lod, 2) + ' in meno'}. Da allora il polo di rotazione si è spostato di ${fmt(pd, 1)} metri sulla crosta${leaps > 0 ? ' e agli orologi sono stati aggiunti ' + leaps + ' secondi intercalari' : ''}.`);
+  } else {
+    cards.push(['Rotazione', '–', C.dim, 'le misure quotidiane IERS iniziano nel 1962']);
+  }
+  // Asse e campo magnetico
+  const epsThen = (oblMean(jcent(new Date(t))) + nutObl(jcent(new Date(t)))) / 3600, epsNow = (oblMean(jcent(new Date())) + nutObl(jcent(new Date()))) / 3600;
+  const dEps = (epsNow - epsThen) * 3600;
+  cards.push(['Inclinazione dell\'asse', `${fmt(epsThen, 4)}°`, C.text, `oggi ${dEps >= 0 ? '+' : ''}${fmt(dEps, 1)}″ · tropici spostati di ${fmt(Math.abs(dEps) * ARCSEC_M, 0)} m`]);
+  const dThen = dipoleAt(year), dNow = dipoleAt(new Date().getUTCFullYear() + new Date().getUTCMonth() / 12);
+  cards.push(['Campo magnetico', `${fmt(dThen.M / 1e22, 3)} <small>·10²² A·m²</small>`, C.text, `oggi è ${fmt((1 - dNow.M / dThen.M) * 100, 1)}% più debole`]);
+  // Luna
+  const mp = moonPhase(t);
+  cards.push(['Luna', mp.name, C.text, `illuminata al ${Math.round(mp.ill * 100)}%`]);
+  story.push(`L'asse era inclinato di ${dms(epsThen)}; da allora il campo magnetico terrestre si è indebolito del ${fmt((1 - dNow.M / dThen.M) * 100, 1)}% e il polo geomagnetico, che stava a ${fmt(dThen.lat, 1)}° N, si è avvicinato al polo geografico. In cielo c'era ${mp.phrase}.`);
+  // Sole e tempeste (storico ECHO: giorno per giorno negli ultimi 2 anni, mese per mese dal 1932)
+  if (sunR.status === 'fulfilled') {
+    const sh = sunR.value.sun || {}, dd = (sh.daily || []).find(d => d.giorno === iso && d.ap != null), mm = (sh.monthly || []).find(m => m.mese === iso.slice(0, 7));
+    const top = (sh.top || []).findIndex(d => d.giorno === iso);
+    if (dd) {
+      cards.push(['Sole quel giorno', `${dd.sn ?? '–'} <small>macchie</small>`, C.warn, `Ap ${dd.ap} · ${apWord(dd.ap)}`]);
+      story.push(`Sul Sole si contavano ${dd.sn} macchie e l'indice geomagnetico Ap valeva ${dd.ap}: ${apWord(dd.ap)}.`);
+    } else if (mm) {
+      cards.push(['Sole quel mese', `${fmt(mm.sn, 0)} <small>macchie</small>`, C.warn, `Ap medio ${fmt(mm.ap, 0)} · giorno più agitato Ap ${mm.ap_max}`]);
+      story.push(`In quel mese il Sole mostrava in media ${fmt(mm.sn, 0)} macchie; il giorno più agitato del mese il campo terrestre ha raggiunto Ap ${mm.ap_max} (${apWord(mm.ap_max)}).`);
+    } else if (iso < '1932-01-01') cards.push(['Sole', '–', C.dim, 'lo storico solare parte dal 1932']);
+    if (top >= 0) story.push(`⚡ È una delle 12 tempeste geomagnetiche più forti mai registrate dal 1932 (n. ${top + 1}, Ap ${sh.top[top].ap}).`);
+  }
+  // Terremoti
+  if (qR.status === 'fulfilled') {
+    const f = qR.value.features || [];
+    if (f.length) {
+      const q = f[0].properties, [qlon, qlat] = f[0].geometry.coordinates;
+      const where = `${fmt(Math.abs(qlat), 1)}° ${qlat >= 0 ? 'N' : 'S'} ${fmt(Math.abs(qlon), 1)}° ${qlon >= 0 ? 'E' : 'O'}`;
+      q.place = `${q.place || ''} (${where})`;
+      cards.push(['Terremoto più forte', `M${fmt(q.mag, 1)}`, q.mag >= 7 ? C.pink : q.mag >= 6 ? C.orange : C.warn, q.place]);
+      story.push(`Il terremoto più forte del giorno nel catalogo USGS: magnitudo ${fmt(q.mag, 1)}, ${q.place}${f.length > 1 ? `; in tutto ${f.length >= 5 ? 'almeno 5' : f.length} sismi di magnitudo 5 o più` : ''}.${iso < '1973-01-01' ? ' (Prima del 1973 il catalogo mondiale è meno completo per le magnitudo più basse.)' : ''}`);
+    } else {
+      cards.push(['Terremoti', 'nessuno M5+', C.ok, 'nel catalogo USGS per quel giorno']);
+      story.push('Nessun terremoto di magnitudo 5 o più nel catalogo USGS quel giorno: una giornata tranquilla per il pianeta.');
+    }
+  }
+  $('day-cards').innerHTML = cards.map(([l, v, c, n]) => `<div class="card"><div class="lab">${l}</div><div class="val" style="color:${c}">${v}</div><div class="note">${n}</div></div>`).join('');
+  const box = $('day-story'); box.hidden = false;
+  box.innerHTML = `<p><b>${fmtD}</b></p>` + story.map(x => `<p>${x}</p>`).join('');
+  $('day-status').textContent = '';
+}
+let dayPending = null;
+function dayFromUrl() {
+  if (dayPending) { const d = dayPending; dayPending = null; tellDay(d); return; }
+  const q = new URLSearchParams(location.search).get('data');
+  if (q) { tellDay(q); setTimeout(() => $('s-giorno').scrollIntoView(), 300); }
+}
+function initDay() {
+  const inp = $('day-in'); inp.max = new Date().toISOString().slice(0, 10);
+  $('day-presets').innerHTML = DAY_PRESETS.map(([d, l]) => `<button class="chip" type="button" data-d="${d}">${l} · ${d.slice(0, 4)}</button>`).join('');
+  $('day-presets').onclick = e => { const d = e.target.dataset && e.target.dataset.d; if (d) tellDay(d); };
+  $('day-go').onclick = () => tellDay(inp.value);
+  inp.onkeydown = e => { if (e.key === 'Enter') tellDay(inp.value); };
+  $('day-share').onclick = async () => { const url = location.origin + location.pathname + (inp.value ? '?data=' + inp.value : '') + '#s-giorno';
+    try { await navigator.clipboard.writeText(url); $('day-status').textContent = 'Link copiato.'; } catch { $('day-status').textContent = url; } };
+}
+
+// ───────────────────────── ASCOLTA LA TERRA ─────────────────────────
+let audio = null;
+function initSound() {
+  $('snd-btn').disabled = false;
+  $('snd-btn').onclick = () => audio ? stopSound() : playSound();
+}
+function stopSound() {
+  if (!audio) return;
+  try { audio.ctx.close(); } catch {}
+  cancelAnimationFrame(audio.raf); audio = null;
+  $('snd-btn').classList.remove('on'); $('snd-btn').textContent = '🔊 Ascolta la Terra (60 anni in 1 minuto)';
+  const ch = charts['c-lod-all']; if (ch) { ch.options.plugins.playhead = {}; ch.update('none'); }
+}
+function playSound() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) { $('snd-status').textContent = 'Il browser non supporta l\'audio Web.'; return; }
+  const obs = EOP_ALL.filter(r => r.obs);
+  const months = meanBy(obs, r => r.date.slice(0, 7), r => r.lod);
+  const mx = new Map(meanBy(obs, r => r.date.slice(0, 7), r => r.x).map(e => [e.k, e.v]));
+  const my = new Map(meanBy(obs, r => r.date.slice(0, 7), r => r.y).map(e => [e.k, e.v]));
+  const leapMonths = new Set(); for (let i = 1; i < obs.length; i++) if (obs[i].dat !== obs[i - 1].dat && obs[i].date >= '1972') leapMonths.add(obs[i].date.slice(0, 7));
+  const lo = Math.min(...months.map(m => m.v)), hi = Math.max(...months.map(m => m.v));
+  const ctx = new AC(), DUR = 60, N = months.length, t0 = ctx.currentTime + 0.15, step = DUR / N;
+  const master = ctx.createGain(); master.gain.value = 0.0001; master.connect(ctx.destination);
+  master.gain.exponentialRampToValueAtTime(0.9, t0 + 1.5); master.gain.setValueAtTime(0.9, t0 + DUR - 1.5); master.gain.exponentialRampToValueAtTime(0.0001, t0 + DUR + 0.3);
+  // voce 1: durata del giorno (giorno più corto = Terra più veloce = nota più alta), 3 ottave
+  const o1 = ctx.createOscillator(); o1.type = 'triangle';
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+  const g1 = ctx.createGain(); g1.gain.value = 0.16; o1.connect(lp).connect(g1).connect(master);
+  // voce 2: il polo — distanza dal centro = altezza, x = posizione sinistra/destra
+  const o2 = ctx.createOscillator(); o2.type = 'sine'; const g2 = ctx.createGain(); g2.gain.value = 0.06;
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null; o2.connect(g2); if (pan) g2.connect(pan).connect(master); else g2.connect(master);
+  const xs = months.map(m => mx.get(m.k)), ys = months.map(m => my.get(m.k));
+  const cx = xs.reduce((a, b) => a + b) / N, cy = ys.reduce((a, b) => a + b) / N;
+  const rr = months.map((_, i) => Math.hypot(xs[i] - cx, ys[i] - cy)), rmax = Math.max(...rr), xmax = Math.max(...xs.map(v => Math.abs(v - cx)));
+  months.forEach((m, i) => { const t = t0 + i * step;
+    o1.frequency.linearRampToValueAtTime(110 * Math.pow(2, 3 * (hi - m.v) / (hi - lo)), t);
+    o2.frequency.linearRampToValueAtTime(330 * Math.pow(2, rr[i] / rmax), t);
+    if (pan) pan.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, (xs[i] - cx) / xmax)), t);
+    if (leapMonths.has(m.k)) { const c = ctx.createOscillator(), cg = ctx.createGain(); c.type = 'square'; c.frequency.value = 1760;
+      cg.gain.setValueAtTime(0.0001, t); cg.gain.exponentialRampToValueAtTime(0.12, t + 0.005); cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      c.connect(cg).connect(master); c.start(t); c.stop(t + 0.1); } });
+  o1.start(t0); o2.start(t0); o1.stop(t0 + DUR + 0.4); o2.stop(t0 + DUR + 0.4);
+  audio = { ctx, raf: 0 };
+  $('snd-btn').classList.add('on'); $('snd-btn').textContent = '⏹ Ferma';
+  const ch = charts['c-lod-all'];
+  const frame = () => { if (!audio) return; const el = ctx.currentTime - t0;
+    if (el > DUR + 0.5) { stopSound(); return; }
+    const i = Math.max(0, Math.min(N - 1, Math.floor(el / step)));
+    if (ch) { ch.options.plugins.playhead = { index: i, label: months[i].k.slice(0, 4) }; ch.update('none'); }
+    $('snd-status').textContent = `${months[i].k.slice(0, 4)} · giorno ${months[i].v >= 0 ? '+' : ''}${fmt(months[i].v, 2)} ms${leapMonths.has(months[i].k) ? ' · secondo intercalare!' : ''}`;
+    audio.raf = requestAnimationFrame(frame); };
+  audio.raf = requestAnimationFrame(frame);
+}
+
+// ───────────────────────── REPLAY DELLO SCUDO ─────────────────────────
+let mpFrames = [], mpReplay = null;
+function initReplay() {
+  $('mp-replay').onclick = () => {
+    if (mpReplay) { cancelAnimationFrame(mpReplay); mpReplay = null; $('mp-replay').classList.remove('on'); $('mp-replay').textContent = '▶ Rigioca le ultime 24 ore in 20 secondi'; drawNowShield(); return; }
+    const t0 = performance.now(), DUR = 20000, N = mpFrames.length; let minR = Infinity, minT = null;
+    $('mp-replay').classList.add('on'); $('mp-replay').textContent = '⏹ Ferma';
+    const step = now => { const f = Math.max(0, Math.min(1, (now - t0) / DUR)), fr = mpFrames[Math.min(N - 1, Math.floor(f * N))];
+      const pd = 1.6726e-6 * fr.dens * fr.speed ** 2, m = drawMagnetosphere(fr.bz, pd, fr.speed, new Date(fr.t).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }));
+      if (m.r0 < minR) { minR = m.r0; minT = fr.t; }
+      $('mp-replay-status').textContent = `scudo a ${fmt(m.r0, 1)} R⊕ · minimo finora ${fmt(minR, 1)} R⊕ (${hhmm(minT)})`;
+      if (f < 1) mpReplay = requestAnimationFrame(step); else { mpReplay = null; $('mp-replay').classList.remove('on'); $('mp-replay').textContent = '▶ Rigioca le ultime 24 ore in 20 secondi'; drawNowShield(); } };
+    mpReplay = requestAnimationFrame(step);
+  };
+}
+function drawNowShield() { if (swNowG && pdynG) drawMagnetosphere(bzNowG, pdynG, swNowG); }
+let swNowG = null, bzNowG = null, pdynG = null;
+
+// ───────────────────────── TERREMOTI E ROTAZIONE ─────────────────────────
+function pearson(a, b) {
+  const n = a.length, ma = a.reduce((s, v) => s + v, 0) / n, mb = b.reduce((s, v) => s + v, 0) / n;
+  let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++) { const x = a[i] - ma, y = b[i] - mb; sab += x * y; saa += x * x; sbb += y * y; }
+  return sab / Math.sqrt(saa * sbb);
+}
+// Toglie la tendenza lineare (retta dei minimi quadrati) da una serie anno → valore
+function detrend(map) {
+  const ks = [...map.keys()], n = ks.length, mx = ks.reduce((s, k) => s + k, 0) / n, my = ks.reduce((s, k) => s + map.get(k), 0) / n;
+  let sxy = 0, sxx = 0; for (const k of ks) { sxy += (k - mx) * (map.get(k) - my); sxx += (k - mx) ** 2; }
+  const bb = sxy / sxx; return new Map(ks.map(k => [k, map.get(k) - my - bb * (k - mx)]));
+}
+async function runQuakeTest() {
+  const btn = $('eq-run'); btn.disabled = true; $('eq-status').textContent = 'Scarico il catalogo USGS M7+ dal 1962…';
+  try {
+    const q = await getJSON('https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=1962-01-01&minmagnitude=7&orderby=time-asc');
+    const y0 = 1962, y1 = new Date().getUTCFullYear() - 1, years = []; for (let y = y0; y <= y1; y++) years.push(y);
+    const cnt = new Map(years.map(y => [y, 0]));
+    for (const f of q.features) { const y = new Date(f.properties.time).getUTCFullYear(); if (cnt.has(y)) cnt.set(y, cnt.get(y) + 1); }
+    const obs = EOP_ALL.filter(r => r.obs);
+    const lodY = new Map(meanBy(obs, r => r.date.slice(0, 4), r => r.lod).map(e => [+e.k, e.v]).filter(([y]) => y <= y1));
+    const rateY = new Map([...lodY.keys()].filter(y => lodY.has(y - 1)).map(y => [y, lodY.get(y) - lodY.get(y - 1)]));
+    const LAGS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const corrFor = (counts, series, lag) => { const a = [], b = []; years.forEach((y, i) => { const v = series.get(y - lag); if (v != null) { a.push(counts[i]); b.push(v); } }); return pearson(a, b); };
+    // Il test vero: tendenze lineari tolte da tutte le serie (altrimenti due cose che cambiano lentamente
+    // in 60 anni sembrano legate anche se non lo sono) e confronto con la serie dei terremoti spostata
+    // circolarmente di 5…n−5 anni, che conserva l'andamento a ondate dei terremoti stessi.
+    const runTest = (counts, L, R) => {
+      const rl = LAGS.map(l => corrFor(counts, L, l)), rr = LAGS.map(l => corrFor(counts, R, l));
+      const all = [...rl, ...rr], best = Math.max(...all.map(Math.abs)), iBest = all.map(Math.abs).indexOf(best);
+      const nullMax = [];
+      for (let k = 5; k <= counts.length - 5; k++) { const sh = [...counts.slice(k), ...counts.slice(0, k)];
+        nullMax.push(Math.max(...LAGS.map(l => Math.abs(corrFor(sh, L, l))), ...LAGS.map(l => Math.abs(corrFor(sh, R, l))))); }
+      nullMax.sort((x, y) => x - y);
+      return { rl, rr, r: all[iBest], isRate: iBest >= LAGS.length, lag: LAGS[iBest % LAGS.length],
+        p: nullMax.filter(v => v >= best).length / nullMax.length, thr95: nullMax[Math.floor(nullMax.length * 0.95)], nShift: nullMax.length };
+    };
+    const C1 = years.map(y => cnt.get(y));
+    const rawT = runTest(C1, lodY, rateY);
+    const cD = detrend(cnt), detT = runTest(years.map(y => cD.get(y)), detrend(lodY), detrend(rateY));
+    chart('c-eq-years', {
+      data: { labels: years, datasets: [
+        { type: 'bar', label: 'Terremoti M7+ nell\'anno', data: C1, backgroundColor: 'rgba(255,45,120,.55)', yAxisID: 'y' },
+        { type: 'line', label: 'Durata del giorno, media annua (ms)', data: years.map(y => lodY.get(y)), borderColor: C.warn, pointRadius: 0, borderWidth: 2, yAxisID: 'y2' },
+      ] },
+      options: { plugins: { title: { display: true, text: 'Terremoti M7+ (USGS) e durata del giorno (IERS), anno per anno' } },
+        scales: { x: { ticks: { maxTicksLimit: 10, maxRotation: 0 }, grid: { display: false } }, y: { title: { display: true, text: 'M7+ all\'anno' } },
+          y2: { position: 'right', title: { display: true, text: 'ms' }, grid: { drawOnChartArea: false } } } },
+    });
+    chart('c-eq-lag', {
+      type: 'line',
+      data: { labels: LAGS.map(l => l === 0 ? 'stesso anno' : l + ' anni prima'), datasets: [
+        { label: 'con la durata del giorno', data: detT.rl, borderColor: C.warn, backgroundColor: C.warn, pointRadius: 4, borderWidth: 2 },
+        { label: 'con il rallentamento (variazione annua)', data: detT.rr, borderColor: C.cyan, backgroundColor: C.cyan, pointRadius: 4, borderWidth: 2 },
+      ] },
+      options: { plugins: { title: { display: true, text: 'Correlazione con i terremoti M7+, tendenze tolte, rotazione spostata indietro nel tempo' },
+        thresholds: { lines: [{ value: detT.thr95, label: 'soglia del caso (95%)', color: C.dim }, { value: -detT.thr95, label: '', color: C.dim }] } },
+        scales: { x: { ticks: { maxRotation: 0, autoSkip: true } }, y: { min: -1, max: 1, title: { display: true, text: 'correlazione r' } } } },
+    });
+    const tot = C1.reduce((x, y) => x + y, 0);
+    const what = t => `${t.isRate ? 'il rallentamento della Terra' : 'la durata del giorno'} ${t.lag ? t.lag + ' anni prima' : 'dello stesso anno'}`;
+    const pct = v => fmt(v * 100, v < 0.1 ? 1 : 0) + '%';
+    const verdict = detT.p < 0.05
+      ? `<p><b>Il segnale c'è.</b> Anche dopo aver tolto le tendenze di lungo periodo, la correlazione più forte (r = ${fmt(detT.r, 2)}) lega i terremoti M7+ a ${what(detT)}, e solo il ${pct(detT.p)} delle serie spostate fa altrettanto. È un indizio interessante, non la prova di una causa.</p>`
+      : `<p><b>Nessuna prova.</b> Tolte le tendenze di lungo periodo, la correlazione più forte (r = ${fmt(detT.r, 2)}, con ${what(detT)}) viene eguagliata o superata dal ${pct(detT.p)} delle serie spostate a caso. Con questi ${years.length} anni di dati, il numero di grandi terremoti non segue la rotazione della Terra più di quanto farebbe il caso.</p>`;
+    const lesson = rawT.p < 0.05 && detT.p >= 0.05
+      ? `<p><b>La trappola, vista dal vivo.</b> Senza togliere le tendenze il test sembrava positivo: r = ${fmt(rawT.r, 2)} con ${what(rawT)}, p = ${fmt(rawT.p, 2)}. Ma la durata del giorno è scesa per decenni mentre i terremoti M7+ registrati sono leggermente aumentati: due tendenze lente che vanno in direzioni opposte producono una correlazione anche se non hanno niente in comune. È lo stesso errore che fa sembrare legate le cicogne e le nascite.</p>`
+      : `<p class="status">Senza togliere le tendenze: r = ${fmt(rawT.r, 2)} con ${what(rawT)}, p = ${fmt(rawT.p, 2)}.</p>`;
+    $('eq-verdict').hidden = false;
+    $('eq-verdict').innerHTML = verdict + lesson + `<p class="status">${tot} terremoti M7+ dal ${y0} al ${y1}, in media ${fmt(tot / years.length, 1)} all'anno. Metodo: correlazione di Pearson per ritardi da 0 a 8 anni, cercando il massimo sia sulla durata del giorno sia sulla sua variazione annua; la stessa ricerca ripetuta su ${detT.nShift} spostamenti circolari della serie dei terremoti dà la soglia del caso. Le repliche dei grandi sismi non sono state tolte.</p>`;
+    $('eq-status').textContent = 'Fatto.'; btn.textContent = 'Ripeti il test';
+  } catch (err) { console.error(err); $('eq-status').textContent = 'Catalogo USGS non raggiungibile: ' + err.message; }
+  btn.disabled = false;
+}
+
 // ───────────────────────── AVVIO ─────────────────────────
 async function loadEOP() {
   try {
     const txt = await (await fetch(EOP_URL)).text();
     const all = parseEOP(txt);
     if (all.length < 1000) throw new Error('dati EOP incompleti');
+    EOP_ALL = all;
+    initClock(); initSound(); $('eq-run').disabled = false;
+    dayFromUrl();
     const rot = renderRotation(all);
     const pole = renderPole(all);
     const obl = renderObliquity();
@@ -784,6 +1174,9 @@ async function loadEOP() {
 }
 
 initGravity();
+initDay();
+initReplay();
+$('eq-run').onclick = runQuakeTest;
 loadLand().then(() => { drawGravityMap(); }).catch(() => {});
 renderField();
 loadEOP();

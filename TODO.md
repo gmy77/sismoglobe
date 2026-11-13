@@ -6,6 +6,28 @@ Idee e controlli per le prossime sessioni. Stato aggiornato: **v1.9.9** (2026-10
 
 ### Terra dinamica (`terra.html`, idee del 2026-11-08)
 
+- [x] **Nuove sezioni del 2026-11-13** (provate in locale, da pubblicare): orologio Terra/atomico (UT1 da EOP
+  interpolato), "Com'era la Terra in un giorno qualsiasi" (`?data=AAAA-MM-GG`, preset storici, dati IERS dal
+  1962, Sole mensile dal 1932 dallo storico ECHO, terremoto più forte del giorno da USGS, Luna, campo IGRF),
+  "Ascolta la Terra" (Web Audio, 60 anni in 60 s), replay dello scudo 24 h in 20 s, test onesto terremoti
+  M7+ contro rotazione (tendenze tolte + spostamenti circolari: oggi p ≈ 0,29, nessuna prova; senza togliere
+  le tendenze sarebbe p ≈ 0,02, trappola mostrata nella pagina).
+
+- [x] **Frase "dal 1962" fraintendibile** — nel riquadro "Il giorno più corto mai misurato" (funzione
+  `renderRotation`, testo dentro `insights('ins-rot', …)`) la frase "più veloce di qualunque altro giorno
+  dal 1962" fa pensare che nel 1962 sia successo qualcosa. In realtà il 1962 è solo l'inizio della serie
+  IERS e quell'anno i giorni erano lunghi (media +1,31 ms, nessuno sotto le 24 h). Riscrivere ad esempio:
+  "…di qualunque altro giorno dall'inizio delle misure moderne (1962)". Valutare se aggiungere una riga
+  sul perché i record cadono sempre fra fine giugno e inizio luglio (venti estivi + marea lunare + nucleo).
+  Fatto il 2026-11-13: frase riscritta e aggiunto il riquadro "Perché i record cadono a inizio estate".
+- [x] **Riga chiara sotto l'Antartide nella mappa della gravità** — in fondo alla mappa resta una sottile
+  linea orizzontale: è il contorno dell'Antartide che in `land-110m` si chiude lungo il parallelo −90°.
+  In `drawGravityMap` saltare il tratto del contorno (stroke) quando due punti consecutivi stanno entrambi
+  sotto circa −89,9°, lasciando invariato il riempimento.
+  Fatto il 2026-11-13: la causa vera era diversa. In `land-110m` l'Antartide arriva solo a −85,6° e il suo
+  anello fa il giro completo delle longitudini: `closePath` tracciava un segmento orizzontale da −180° a
+  +180°. Ora per gli anelli circumpolari il riempimento scende fino a −90° e il contorno resta aperto.
+
 - [ ] **Valore vivo nel riquadro 🧭 del globo** — oggi mostra solo l'icona. Far vedere un numero che
   cambia, ad esempio la durata del giorno (`+1,2 ms`) o la distanza dello scudo magnetico (`10 R⊕`),
   colorato come gli altri riquadri. Richiede codice in `main.js` (fetch NOAA/CelesTrak) e quindi bump di

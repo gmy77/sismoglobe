@@ -1,5 +1,14 @@
 # Changelog
 
+## Terra dinamica 2 - 2026-11-13
+
+- Orologio Terra contro orologio atomico: UTC e UT1 affiancati al millesimo, con la stima del prossimo secondo intercalare e di quando lo scarto arriverà a un minuto.
+- "Com'era la Terra in un giorno qualsiasi": per ogni data dal 1900 durata del giorno, spostamento del polo, secondi intercalari, inclinazione dell'asse, campo magnetico, Luna, Sole (dal 1932) e terremoto più forte del giorno (USGS). Date famose già pronte e link condivisibile `?data=AAAA-MM-GG`.
+- "Ascolta la Terra": la durata del giorno dal 1962 e l'oscillazione del polo trasformate in suono, 60 anni in un minuto.
+- Replay della magnetosfera: le ultime 24 ore dello scudo magnetico in 20 secondi.
+- Test sui terremoti M7+ e la rotazione: tendenze di lungo periodo tolte e confronto con la serie spostata nel tempo; oggi il risultato è "nessuna prova" e la pagina mostra perché senza quel controllo sembrerebbe significativo.
+- Corretti la frase sul 1962 (ora "dall'inizio delle misure moderne") e la riga orizzontale sotto l'Antartide nella mappa della gravità.
+
 ## ECHO Constellation - 2026-11-12
 
 - Nuovo riquadro "satelliti" in alto accanto a "terra": apre in una nuova scheda [ECHO Constellation](https://echo-constellation.gimmy077.workers.dev/), la mappa piatta con i satelliti in tempo reale (ISS e Tiangong, Starlink, GPS, GLONASS, Galileo, BeiDou, OneWeb, Amazon Leo, Iridium). È un progetto a parte, ospitato su Cloudflare.

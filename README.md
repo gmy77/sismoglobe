@@ -50,7 +50,9 @@ Diagnostica delle fonti e log Cloudflare: [SOURCE-OPERATIONS.md](SOURCE-OPERATIO
 
 - Riquadro "satelliti" in alto: apre [ECHO Constellation](https://echo-constellation.gimmy077.workers.dev/), la mappa piatta con i satelliti in tempo reale. Progetto separato (cartella `repos/orbite`), ospitato su Cloudflare Workers.
 
-## Terra dinamica (2026-11-08)
+## Terra dinamica (2026-11-08, ampliata il 2026-11-13)
+
+- **Nuove sezioni (13/11)**: orologio UTC/UT1 (UT1−UTC interpolato fra i giorni IERS), "Com'era la Terra in un giorno qualsiasi" (`terra.html?data=AAAA-MM-GG`; Sole giornaliero solo negli ultimi 2 anni, mensile dal 1932, da `sismo-fvg…/api/radiation/history`; terremoto più forte da USGS FDSN), suono con Web Audio, replay dello scudo di 24 ore, test terremoti M7+ (USGS dal 1962) contro durata del giorno con tendenze tolte e spostamenti circolari come controllo.
 
 - **Pagina [`terra.html`](https://sismo.gimmycloud.net/terra.html)**, aperta dal riquadro "terra" in alto. Tutto lato browser, nessun worker: le fonti hanno CORS aperto.
 - **Rotazione**: durata del giorno (LOD) dal 1962, ultimi 3 anni con previsione IERS, UT1−UTC dal 1972 con i secondi intercalari. Fonte `celestrak.org/SpaceData/EOP-All.csv` (~2,4 MB, una volta per visita).
