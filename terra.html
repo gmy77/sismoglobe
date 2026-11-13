@@ -932,7 +932,7 @@ async function tellDay(iso) {
   const cards = [], story = [];
   const fmtD = fmtDate(iso);
   // articoli: "l'8 maggio", "l'11 marzo", "il 6 maggio"; "dello 0,8%", "dell'8%", "del 3%"
-  const ilD = (/^(8|11)/.test(fmtD) ? "l'" : 'il ') + fmtD, IlD = ilD[0].toUpperCase() + ilD.slice(1);
+  const ilD = (/^(8|11) /.test(fmtD) ? "l'" : 'il ') + fmtD, IlD = ilD[0].toUpperCase() + ilD.slice(1);
   const delPct = t => (/^0/.test(t) ? 'dello ' : /^(8|11)(,|$)/.test(t) ? "dell'" : 'del ') + t + '%';
   // Rotazione e polo (IERS dal 1962)
   const e = eopOn(iso), now = EOP_ALL && EOP_ALL.filter(r => r.obs).slice(-1)[0];
