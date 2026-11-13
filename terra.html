@@ -931,6 +931,9 @@ async function tellDay(iso) {
   ]);
   const cards = [], story = [];
   const fmtD = fmtDate(iso);
+  // articoli: "l'8 maggio", "l'11 marzo", "il 6 maggio"; "dello 0,8%", "dell'8%", "del 3%"
+  const ilD = (/^(8|11)/.test(fmtD) ? "l'" : 'il ') + fmtD, IlD = ilD[0].toUpperCase() + ilD.slice(1);
+  const delPct = t => (/^0/.test(t) ? 'dello ' : /^(8|11)(,|$)/.test(t) ? "dell'" : 'del ') + t + '%';
   // Rotazione e polo (IERS dal 1962)
   const e = eopOn(iso), now = EOP_ALL && EOP_ALL.filter(r => r.obs).slice(-1)[0];
   if (e) {
@@ -939,7 +942,7 @@ async function tellDay(iso) {
     cards.push(['Polo di rotazione', `${fmt(pd, 1)} <small>m</small>`, C.text, 'di quanto si è spostato da quel giorno a oggi']);
     const leaps = iso < '1972-01-01' ? now.dat - 10 : now.dat - e.dat;
     cards.push(['Secondi intercalari', `${leaps}`, C.text, 'aggiunti da quel giorno a oggi']);
-    story.push(`Il ${fmtD} la Terra impiegava ${e.lod >= 0 ? fmt(e.lod, 2) + ' millisecondi in più' : fmt(-e.lod, 2) + ' millisecondi in meno'} delle 24 ore esatte per un giro. Oggi ${now.lod >= 0 ? 'ne impiega ' + fmt(now.lod, 2) + ' in più' : 'ne impiega ' + fmt(-now.lod, 2) + ' in meno'}. Da allora il polo di rotazione si è spostato di ${fmt(pd, 1)} metri sulla crosta${leaps > 0 ? ' e agli orologi sono stati aggiunti ' + leaps + ' secondi intercalari' : ''}.`);
+    story.push(`${IlD} la Terra impiegava ${e.lod >= 0 ? fmt(e.lod, 2) + ' millisecondi in più' : fmt(-e.lod, 2) + ' millisecondi in meno'} delle 24 ore esatte per un giro. Oggi ${now.lod >= 0 ? 'ne impiega ' + fmt(now.lod, 2) + ' in più' : 'ne impiega ' + fmt(-now.lod, 2) + ' in meno'}. Da allora il polo di rotazione si è spostato di ${fmt(pd, 1)} metri sulla crosta${leaps > 0 ? ' e agli orologi sono stati aggiunti ' + leaps + ' secondi intercalari' : ''}.`);
   } else {
     cards.push(['Rotazione', '–', C.dim, 'le misure quotidiane IERS iniziano nel 1962']);
   }
@@ -952,7 +955,7 @@ async function tellDay(iso) {
   // Luna
   const mp = moonPhase(t);
   cards.push(['Luna', mp.name, C.text, `illuminata al ${Math.round(mp.ill * 100)}%`]);
-  story.push(`L'asse era inclinato di ${dms(epsThen)}; da allora il campo magnetico terrestre si è indebolito del ${fmt((1 - dNow.M / dThen.M) * 100, 1)}% e il polo geomagnetico, che stava a ${fmt(dThen.lat, 1)}° N, si è avvicinato al polo geografico. In cielo c'era ${mp.phrase}.`);
+  story.push(`L'asse era inclinato di ${dms(epsThen)}; da allora il campo magnetico terrestre si è indebolito ${delPct(fmt((1 - dNow.M / dThen.M) * 100, 1))} e il polo geomagnetico, che stava a ${fmt(dThen.lat, 1)}° N, si è avvicinato al polo geografico. In cielo c'era ${mp.phrase}.`);
   // Sole e tempeste (storico ECHO: giorno per giorno negli ultimi 2 anni, mese per mese dal 1932)
   if (sunR.status === 'fulfilled') {
     const sh = sunR.value.sun || {}, dd = (sh.daily || []).find(d => d.giorno === iso && d.ap != null), mm = (sh.monthly || []).find(m => m.mese === iso.slice(0, 7));
